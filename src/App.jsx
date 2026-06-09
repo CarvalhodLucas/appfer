@@ -213,19 +213,25 @@ REGLAS DE COMPORTAMIENTO:
 9. Si tiene lesiones o limitaciones físicas → NUNCA incluyas ejercicios que las agraven; sugiere siempre alternativas seguras
 10. Usa la altura, el peso y la edad para dar recomendaciones calóricas y de progresión más precisas
 
-CUANDO GENERES UN ENTRENAMIENTO, devuelve SOLO este JSON:
-{"titulo":"Nombre motivador del entrenamiento","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":30,"ejercicios":[{"nombre":"Nombre","series":3,"repeticiones":"12","descripcion":"Descripción simple"}]}
-
 CUANDO ESTIMES CALORÍAS, devuelve SOLO este JSON:
 {"descripcion":"Resumen","calorias":450,"proteina_g":35,"carbs_g":40,"grasa_g":12}
 
-CUANDO SUGERIERAS PLATOS, devuelve SOLO este JSON:
+CUANDO SUGIRIERAS PLATOS, devuelve SOLO este JSON:
 {"sugerencias":[{"nombre":"Nombre","descripcion":"Descripción","calorias_aprox":350,"tiempo_prep":"20 min"}]}
 
-PROPONER CAMBIOS EN EL PERFIL — Cuando Fernanda confirme querer cambiar su meta calórica, peso u objetivo, añade EXACTAMENTE este bloque al FINAL de tu respuesta:
+ACCIONES — añade EXACTAMENTE al FINAL de tu respuesta (solo una acción por respuesta):
+
+GENERAR ENTRENAMIENTO — Cuando Fernanda pida un entrenamiento o quieras proponerle uno, responde con tu mensaje motivador y añade al final:
+[ACCIÓN:{"type":"generate_workout","workout":{"titulo":"Nombre motivador","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":30,"ejercicios":[{"nombre":"Nombre","series":3,"repeticiones":"12","descripcion":"Descripción simple"}]},"description":"Breve descripción del entrenamiento"}]
+NUNCA muestres el JSON del entrenamiento como texto en el chat — solo el bloque ACCIÓN al final. El entrenamiento quedará guardado automáticamente en la sección Entreno.
+
+REGISTRAR COMIDA — Cuando Fernanda mencione lo que comió y quieras guardarlo en su diario, añade al final:
+[ACCIÓN:{"type":"log_meal","meal":{"description":"200g de arroz con pollo","calories":400,"protein_g":30,"carbs_g":45,"fat_g":10,"meal_type":"desayuno|almuerzo|cena|snack"},"description":"Registrar: descripción breve"}]
+
+CAMBIOS DE PERFIL — Solo cuando Fernanda confirme explícitamente querer cambiar meta calórica, peso u objetivo:
 [ACCIÓN:{"type":"update_calories","value":1800,"description":"Cambiar meta diaria a 1800 kcal"}]
-Tipos disponibles: update_calories (value:número), update_weight (current_weight:número, goal_weight:número), update_goal (goal:"texto").
-Solo añade el bloque tras confirmación explícita. No lo añadas si el usuario solo pregunta o comenta.`
+Tipos: update_calories (value:número), update_weight (current_weight:número, goal_weight:número), update_goal (goal:"texto").
+No añadas el bloque si Fernanda solo pregunta o comenta.`
 }
 
 // ============================================================
@@ -1610,7 +1616,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
 // ============================================================
 // CHAT SCREEN
 // ============================================================
-const ChatScreen = ({ profile, claudeKey, supabase, addToast }) => {
+const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1708,10 +1714,10 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast }) => {
       // Parse action block
       let cleanReply = reply
       let actionData = null
-      const actionMatch = reply.match(/\[ACCIÓN:([\s\S]*?)\]/)
+      const actionMatch = reply.match(/\[ACCIÓN:([\s\S]+)\]\s*$/)
       if (actionMatch) {
         try { actionData = JSON.parse(actionMatch[1]) } catch {}
-        cleanReply = reply.replace(/\[ACCIÓN:[\s\S]*?\]/, '').trim()
+        cleanReply = reply.replace(/\[ACCIÓN:[\s\S]+\]\s*$/, '').trim()
       }
 
       const assistantMsg = { id: Date.now() + 1, role: 'assistant', content: cleanReply }
@@ -1736,19 +1742,62 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast }) => {
       if (pendingAction.type === 'update_calories') {
         await supabase.from('profiles').update({ daily_calories: pendingAction.value }).eq('name', 'Fernanda')
         addToast('success', `Meta calórica cambiada a ${pendingAction.value} kcal 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡Listo! Meta calórica cambiada a ${pendingAction.value} kcal. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
       } else if (pendingAction.type === 'update_weight') {
         const upd = {}
         if (pendingAction.current_weight) upd.current_weight = Number(pendingAction.current_weight)
         if (pendingAction.goal_weight) upd.goal_weight = Number(pendingAction.goal_weight)
         await supabase.from('profiles').update(upd).eq('name', 'Fernanda')
         addToast('success', 'Peso actualizado 🌸')
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡Peso actualizado! Se verá reflejado en tu perfil. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
       } else if (pendingAction.type === 'update_goal') {
         await supabase.from('profiles').update({ goal: pendingAction.goal }).eq('name', 'Fernanda')
         addToast('success', `Objetivo actualizado 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡Objetivo actualizado! 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+      } else if (pendingAction.type === 'generate_workout') {
+        const workout = pendingAction.workout
+        const today = new Date().toISOString().split('T')[0]
+        localStorage.setItem(`ff_pending_treino_${today}`, JSON.stringify(workout))
+        await supabase.from('treinos').insert([{
+          date: today,
+          muscle_group: workout.grupo_muscular,
+          intensity: workout.intensidad,
+          exercises: workout.ejercicios,
+          completed: false,
+        }])
+        addToast('success', `¡Entrenamiento guardado en Entreno! 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡He preparado tu entrenamiento "${workout.titulo}" y lo he guardado en la sección Entreno. ¡Ve allá cuando estés lista! 💪🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+        setPendingAction(null)
+        setTimeout(() => onNavigate?.('workout'), 1200)
+        return
+      } else if (pendingAction.type === 'log_meal') {
+        const meal = pendingAction.meal
+        const today = new Date().toISOString().split('T')[0]
+        await supabase.from('refeicoes').insert([{
+          description: meal.description,
+          calories: meal.calories || 0,
+          protein_g: meal.protein_g || 0,
+          carbs_g: meal.carbs_g || 0,
+          fat_g: meal.fat_g || 0,
+          meal_type: meal.meal_type || 'snack',
+          date: today,
+        }])
+        addToast('success', `Comida registrada 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡Anotado! "${meal.description}" registrado en tu diario (${meal.calories || '?'} kcal). 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+        setPendingAction(null)
+        setTimeout(() => onNavigate?.('nutrition'), 1200)
+        return
       }
-      const confirmMsg = { id: Date.now(), role: 'assistant', content: `¡Listo! He aplicado el cambio: ${pendingAction.description}. Se verá reflejado al navegar al perfil. 🌸` }
-      setMessages(m => [...m, confirmMsg])
-      await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
     } catch {
       addToast('error', 'Error al aplicar el cambio')
     }
@@ -1805,14 +1854,17 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast }) => {
           {pendingAction && (
             <div style={{ margin: '8px 0', background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.25)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '1rem' }}>🌸</span>
-                <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Coach Fit propone un cambio</p>
+                <span style={{ fontSize: '1rem' }}>{pendingAction.type === 'generate_workout' ? '💪' : pendingAction.type === 'log_meal' ? '🥗' : '🌸'}</span>
+                <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {pendingAction.type === 'generate_workout' ? 'Entrenamiento listo' : pendingAction.type === 'log_meal' ? 'Registrar comida' : 'Coach Fit propone un cambio'}
+                </p>
               </div>
               <p style={{ fontSize: '0.9rem', marginBottom: '14px' }}>{pendingAction.description}</p>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setPendingAction(null)}>No, cancelar</button>
+                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setPendingAction(null)}>Cancelar</button>
                 <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={executeAction}>
-                  <Icon name="check" size={14} />Sí, confirmar
+                  <Icon name="check" size={14} />
+                  {pendingAction.type === 'generate_workout' ? 'Guardar en Entreno' : pendingAction.type === 'log_meal' ? 'Guardar en Comidas' : 'Confirmar'}
                 </button>
               </div>
             </div>
@@ -2449,7 +2501,7 @@ export default function App() {
         {screen === 'home' && <HomeScreen {...screenProps} onNavigate={setScreen} />}
         {screen === 'workout' && <WorkoutScreen {...screenProps} />}
         {screen === 'nutrition' && <NutritionScreen {...screenProps} />}
-        {screen === 'chat' && <ChatScreen {...screenProps} />}
+        {screen === 'chat' && <ChatScreen {...screenProps} onNavigate={setScreen} />}
         {screen === 'profile' && <ProfileScreen {...screenProps} onReset={() => { localStorage.clear(); window.location.reload() }} />}
       </main>
 
