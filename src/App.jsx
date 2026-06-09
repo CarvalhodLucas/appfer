@@ -97,6 +97,16 @@ const DEFAULT_PLAN = [
 ]
 
 // ============================================================
+// PUSH NOTIFICATIONS HELPER
+// ============================================================
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+}
+
+// ============================================================
 // SUPABASE CLIENT
 // ============================================================
 let supabaseClient = null
@@ -1826,6 +1836,61 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
     current_weight: profile?.current_weight || '',
     goal_weight: profile?.goal_weight || '',
   })
+  const [notifStatus, setNotifStatus] = useState(() => {
+    if (!('Notification' in window)) return 'unsupported'
+    return Notification.permission // 'default' | 'granted' | 'denied'
+  })
+  const [notifLoading, setNotifLoading] = useState(false)
+
+  const enableNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      addToast('error', 'Tu navegador no soporta notificaciones push')
+      return
+    }
+    setNotifLoading(true)
+    try {
+      const permission = await Notification.requestPermission()
+      setNotifStatus(permission)
+      if (permission !== 'granted') {
+        addToast('error', 'Permiso de notificaciones denegado')
+        setNotifLoading(false)
+        return
+      }
+      const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
+      const sub = existing || await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
+      await supabase.from('push_subscriptions').upsert(
+        { endpoint: sub.endpoint, subscription: sub.toJSON() },
+        { onConflict: 'endpoint' }
+      )
+      addToast('success', '¡Notificaciones activadas! 🔔 Recibirás un mensaje cada día a las 10h')
+    } catch (e) {
+      addToast('error', `Error: ${e.message}`)
+    }
+    setNotifLoading(false)
+  }
+
+  const disableNotifications = async () => {
+    setNotifLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await sub.unsubscribe()
+        await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
+      }
+      setNotifStatus('default')
+      addToast('success', 'Notificaciones desactivadas')
+    } catch (e) {
+      addToast('error', `Error: ${e.message}`)
+    }
+    setNotifLoading(false)
+  }
+
   const [editingPersonal, setEditingPersonal] = useState(false)
   const [personalForm, setPersonalForm] = useState({
     height_cm: profile?.height_cm || '',
@@ -2151,6 +2216,38 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         )}
       </div>
 
+      {/* Push Notifications */}
+      {notifStatus !== 'unsupported' && (
+        <div className="card card-sm">
+          <div className="section-title"><Icon name="bell" />Notificaciones diarias</div>
+          <p className="text-muted" style={{ fontSize: '0.82rem', marginTop: '8px', marginBottom: '14px' }}>
+            Recibe un mensaje motivacional todos los días a las 10h de la mañana de Coach Fit 🌸
+          </p>
+          {notifStatus === 'granted' ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
+                {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
+              </button>
+            </div>
+          ) : notifStatus === 'denied' ? (
+            <div style={{ background: 'rgba(232,115,90,0.07)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+              <p style={{ fontSize: '0.82rem', color: 'var(--coral)' }}>⚠️ Bloqueadas en el navegador. Para activarlas, ve a la configuración del sitio y permite notificaciones manualmente.</p>
+            </div>
+          ) : (
+            <button className="btn btn-primary w-full" onClick={enableNotifications} disabled={notifLoading}>
+              {notifLoading
+                ? <><div className="spinner spinner-sm" />Activando...</>
+                : <><Icon name="bell" size={16} />Activar notificaciones diarias</>
+              }
+            </button>
+          )}
+        </div>
+      )}
+
     </div>
   )
 }
@@ -2253,6 +2350,9 @@ export default function App() {
         localStorage.setItem('ff_profile_photo', profiles[0].photo)
       }
       setIsConfigured(true)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {})
+      }
     } catch (e) {
       console.error('Error al conectar:', e)
       setConfigError(e.message || 'Error desconocido al conectar con Supabase')
