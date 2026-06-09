@@ -173,8 +173,6 @@ SOBRE FERNANDA:
 - Peso meta: ${profile?.goal_weight ? profile.goal_weight + ' kg' : 'no especificado'}
 - Nivel de actividad: ${profile?.activity_level || 'no especificado'}
 - Lesiones o limitaciones físicas: ${profile?.physical_limitations || 'ninguna reportada'}
-- Horas de sueño promedio: ${profile?.sleep_hours ? profile.sleep_hours + 'h' : 'no especificado'}
-- Nivel de estrés habitual: ${profile?.stress_level || 'no especificado'}
 - Horario preferido para entrenar: ${profile?.preferred_workout_time || 'no especificado'}
 - Meta calórica diaria: ${profile?.daily_calories || 1500} kcal
 - Alimentos que le gustan: ${(profile?.food_likes || []).join(', ') || 'no especificados'}
@@ -182,6 +180,8 @@ SOBRE FERNANDA:
 
 CONTEXTO DE HOY ${today}:
 - Humor del día: ${humor || 'no registrado'} (alto / normal / bajo / no registrado)
+- Horas de sueño de anoche: ${todayData.sleepHours ? todayData.sleepHours + 'h' : 'no registrado'}
+- Nivel de estrés de hoy: ${todayData.stressLevel || 'no registrado'} (Bajo / Medio / Alto)
 - Último entrenamiento: ${ultimoTreino?.muscle_group || 'sin datos'} hace ${ultimoTreino ? Math.floor((Date.now() - new Date(ultimoTreino.created_at)) / 86400000) : '?'} días
 - Días entrenados esta semana: ${diasSemana || 0}
 - Calorías consumidas hoy: ${calorias || 0} de ${profile?.daily_calories || 1500} kcal meta
@@ -213,6 +213,8 @@ REGLAS DE COMPORTAMIENTO:
 9. Si tiene lesiones o limitaciones físicas → NUNCA incluyas ejercicios que las agraven; sugiere siempre alternativas seguras
 10. Usa la altura, el peso y la edad para dar recomendaciones calóricas y de progresión más precisas
 11. TEMA ESTRICTO: Solo respondes preguntas sobre entrenamiento, ejercicio, alimentación, nutrición, hábitos saludables, descanso o bienestar físico. Si Fernanda pregunta sobre cualquier otro tema, respóndele con cariño que solo puedes ayudarle con su entrenamiento y alimentación, y redirige la conversación a esos temas.
+12. SUEÑO: Si durmió menos de 6h → propón entrenamiento más ligero y recupérate bien; 6-7h → ajusta intensidad a normal; 8h+ → puede hacer intensidad completa.
+13. ESTRÉS: Si estrés es Alto → prioriza ejercicios de bajo impacto, yoga o estiramientos, y usa tono muy cálido; si es Medio → intensidad normal; si es Bajo → puede ir a tope.
 
 CUANDO ESTIMES CALORÍAS, devuelve SOLO este JSON:
 {"descripcion":"Resumen","calorias":450,"proteina_g":35,"carbs_g":40,"grasa_g":12}
@@ -452,6 +454,8 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
   const [loadingSuggestion, setLoadingSuggestion] = useState(true)
   const [savingHumor, setSavingHumor] = useState(false)
   const [selectedHumor, setSelectedHumor] = useState('')
+  const [selectedSleepHours, setSelectedSleepHours] = useState(null)
+  const [selectedStressLevel, setSelectedStressLevel] = useState(null)
   const [expandedLastWorkout, setExpandedLastWorkout] = useState(false)
   const [dataLoaded, setDataLoaded] = useState(false)
 
@@ -466,6 +470,9 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
     // Load today's humor
     const { data: hd } = await sb.from('humor_checkin').select('*').eq('date', today).single()
     setHumor(hd)
+    if (hd?.level) setSelectedHumor(hd.level)
+    if (hd?.sleep_hours) setSelectedSleepHours(hd.sleep_hours)
+    if (hd?.stress_level) setSelectedStressLevel(hd.stress_level)
 
     // Load today's calories
     const { data: meals } = await sb.from('refeicoes').select('calories').eq('date', today)
@@ -486,6 +493,8 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
     try {
       const sp = buildSystemPrompt(profile, {
         humor: humorData?.level,
+        sleepHours: humorData?.sleep_hours,
+        stressLevel: humorData?.stress_level,
         calorias: cals,
         comidas: [],
         ultimoTreino: treino,
@@ -506,19 +515,24 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
     if (!selectedHumor) return
     setSavingHumor(true)
     try {
+      const payload = {
+        date: today, level: selectedHumor,
+        ...(selectedSleepHours && { sleep_hours: Number(selectedSleepHours) }),
+        ...(selectedStressLevel && { stress_level: selectedStressLevel }),
+      }
       const { data: existing } = await supabase.from('humor_checkin').select('id').eq('date', today).maybeSingle()
       let error
       if (existing) {
-        ;({ error } = await supabase.from('humor_checkin').update({ level: selectedHumor }).eq('date', today))
+        ;({ error } = await supabase.from('humor_checkin').update(payload).eq('date', today))
       } else {
-        ;({ error } = await supabase.from('humor_checkin').insert({ date: today, level: selectedHumor }))
+        ;({ error } = await supabase.from('humor_checkin').insert(payload))
       }
       if (error) throw error
-      setHumor({ level: selectedHumor })
+      setHumor({ level: selectedHumor, sleep_hours: selectedSleepHours ? Number(selectedSleepHours) : null, stress_level: selectedStressLevel || null })
       setShowHumorModal(false)
-      addToast('success', '¡Check-in de humor guardado! 🌸')
+      addToast('success', '¡Check-in guardado! 🌸')
     } catch {
-      addToast('error', 'Error al guardar el humor. Verifica la conexión.')
+      addToast('error', 'Error al guardar. Verifica la conexión.')
     }
     setSavingHumor(false)
   }
@@ -553,7 +567,9 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
                 {humor ? moodLabel[humor.level] : 'Check-in de humor'}
               </p>
               <p className="text-light" style={{ fontSize: '0.8rem' }}>
-                {humor ? '¡Anotado!' : 'Cuéntame cómo estás hoy'}
+                {humor
+                  ? [humor.sleep_hours && `${humor.sleep_hours}h sueño`, humor.stress_level && `estrés ${humor.stress_level.toLowerCase()}`, '¡Anotado!'].filter(Boolean).join(' · ')
+                  : 'Cuéntame cómo estás hoy'}
               </p>
             </div>
           </div>
@@ -672,6 +688,55 @@ const HomeScreen = ({ profile, claudeKey, supabase, onNavigate, addToast }) => {
                 </button>
               ))}
             </div>
+            {/* Sleep hours selector */}
+            <div style={{ marginTop: '20px' }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px', textAlign: 'center' }}>
+                😴 ¿Cuántas horas dormiste? <span style={{ fontWeight: 400 }}>(opcional)</span>
+              </p>
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                {[4, 5, 6, 7, 8, 9].map(h => (
+                  <button
+                    key={h}
+                    onClick={() => setSelectedSleepHours(selectedSleepHours === h ? null : h)}
+                    style={{
+                      padding: '7px 14px', borderRadius: '20px', border: '1.5px solid', cursor: 'pointer',
+                      fontFamily: 'var(--font-body)', fontSize: '0.85rem', fontWeight: 600,
+                      background: selectedSleepHours === h ? 'var(--coral)' : 'transparent',
+                      borderColor: selectedSleepHours === h ? 'var(--coral)' : 'var(--border)',
+                      color: selectedSleepHours === h ? '#fff' : 'var(--text)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {h === 9 ? '9h+' : `${h}h`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Stress level selector */}
+            <div style={{ marginTop: '16px' }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px', textAlign: 'center' }}>
+                🧠 ¿Cómo está tu nivel de estrés? <span style={{ fontWeight: 400 }}>(opcional)</span>
+              </p>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                {[['Bajo', '😌', 'Tranquila'], ['Medio', '😐', 'Normal'], ['Alto', '😤', 'Estresada']].map(([level, emoji, label]) => (
+                  <button
+                    key={level}
+                    onClick={() => setSelectedStressLevel(selectedStressLevel === level ? null : level)}
+                    style={{
+                      flex: 1, padding: '8px 4px', borderRadius: '12px', border: '1.5px solid', cursor: 'pointer',
+                      fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+                      background: selectedStressLevel === level ? 'var(--coral)' : 'transparent',
+                      borderColor: selectedStressLevel === level ? 'var(--coral)' : 'var(--border)',
+                      color: selectedStressLevel === level ? '#fff' : 'var(--text)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.2rem' }}>{emoji}</span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-8 mt-16">
               <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowHumorModal(false)}>Cancelar</button>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveHumor} disabled={!selectedHumor || savingHumor} id="save-humor-btn">
@@ -697,10 +762,13 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [view, setView] = useState('today') // 'today' | 'history' | 'plan'
   const [generated, setGenerated] = useState(false)
   const [humor, setHumor] = useState(null)
+  const [sleepHours, setSleepHours] = useState(null)
+  const [stressLevel, setStressLevel] = useState(null)
   const [seedingPlan, setSeedingPlan] = useState(false)
   const [planExpanded, setPlanExpanded] = useState(null)
   const [weights, setWeights] = useState({})
   const [weightSuggestions, setWeightSuggestions] = useState({})
+  const [exerciseImages, setExerciseImages] = useState({})
   const [exAvoided, setExAvoided] = useState(() => { try { return JSON.parse(localStorage.getItem('ff_ex_avoided') || '[]') } catch { return [] } })
   const [exPrioritized, setExPrioritized] = useState(() => { try { return JSON.parse(localStorage.getItem('ff_ex_prioritized') || '[]') } catch { return [] } })
   const [exInput, setExInput] = useState({ avoided: '', prioritized: '' })
@@ -717,6 +785,12 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     return () => { mountedRef.current = false }
   }, [])
 
+  useEffect(() => {
+    if (expandedExercise !== null && treino?.ejercicios?.[expandedExercise]) {
+      loadExerciseImage(treino.ejercicios[expandedExercise].nombre, expandedExercise)
+    }
+  }, [expandedExercise])
+
   const normalizeTreino = (data) => ({
     ...data,
     titulo: data.titulo || data.muscle_group,
@@ -726,8 +800,8 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
   })
 
   const loadTodayWorkout = async () => {
-    const { data: hd } = await supabase.from('humor_checkin').select('level').eq('date', today).maybeSingle()
-    if (mountedRef.current) setHumor(hd?.level)
+    const { data: hd } = await supabase.from('humor_checkin').select('level, sleep_hours, stress_level').eq('date', today).maybeSingle()
+    if (mountedRef.current) { setHumor(hd?.level); setSleepHours(hd?.sleep_hours ?? null); setStressLevel(hd?.stress_level ?? null) }
     const { data } = await supabase.from('treinos').select('*').eq('date', today).maybeSingle()
     if (data) {
       if (mountedRef.current) { setTreino(normalizeTreino(data)); setGenerated(false) }
@@ -791,6 +865,50 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setView('today')
   }
 
+  const EXERCISE_EN = {
+    'hip thrust': 'hip thrust', 'peso muerto rumano': 'romanian deadlift', 'peso muerto': 'deadlift',
+    'sentadilla': 'squat', 'leg press': 'leg press', 'estocada': 'lunge', 'zancada': 'lunge',
+    'press de banca': 'bench press', 'banca inclinada': 'incline bench press', 'press inclinado': 'incline bench press',
+    'dominadas': 'pull-up', 'jalon': 'lat pulldown', 'jalón': 'lat pulldown', 'remo': 'bent over row',
+    'triceps polea': 'triceps pushdown', 'triceps': 'triceps extension', 'biceps': 'biceps curl',
+    'curl de biceps': 'biceps curl', 'curl': 'biceps curl', 'plancha': 'plank', 'crunch': 'crunch',
+    'russian twist': 'russian twist', 'abductor': 'hip abduction', 'patada': 'glute kickback',
+    'elevacion de piernas': 'leg raise', 'levantamiento de piernas': 'leg raise', 'press militar': 'shoulder press',
+    'press de hombros': 'shoulder press', 'elevaciones laterales': 'lateral raise', 'gemelos': 'calf raise',
+    'fondos': 'dip', 'burpee': 'burpee', 'mountain climber': 'mountain climber',
+    'peso corporal': 'bodyweight squat', 'sentadilla bulgara': 'bulgarian split squat',
+    'hip abduction': 'hip abduction', 'glute bridge': 'glute bridge',
+  }
+
+  const getExerciseQuery = (nombre) => {
+    const n = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+    for (const [key, val] of Object.entries(EXERCISE_EN)) {
+      if (n.includes(key)) return val
+    }
+    return n
+  }
+
+  const loadExerciseImage = async (nombre, idx) => {
+    if (exerciseImages[idx] !== undefined) return
+    setExerciseImages(prev => ({ ...prev, [idx]: 'loading' }))
+    try {
+      const q = encodeURIComponent(getExerciseQuery(nombre))
+      const r1 = await fetch(`https://wger.de/api/v2/exercise/?format=json&language=2&name=${q}&limit=3`)
+      const d1 = await r1.json()
+      for (const ex of (d1.results || [])) {
+        const r2 = await fetch(`https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=${ex.exercise_base}&is_main=True&limit=1`)
+        const d2 = await r2.json()
+        if (d2.results?.length) {
+          setExerciseImages(prev => ({ ...prev, [idx]: `https://wger.de${d2.results[0].image}` }))
+          return
+        }
+      }
+      setExerciseImages(prev => ({ ...prev, [idx]: null }))
+    } catch {
+      setExerciseImages(prev => ({ ...prev, [idx]: null }))
+    }
+  }
+
   const generateWorkout = async (variant = false) => {
     if (!humor) {
       addToast('error', '¡Registra primero tu humor del día en Inicio! 🌸')
@@ -807,15 +925,16 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
       const weightHistoryStr = Object.entries(weightSuggestions).map(([ex, kg]) => `${ex}: ${kg}kg`).join(', ') || null
 
       const sp = buildSystemPrompt(profile, {
-        humor, calorias: cals, comidas: [], ultimoTreino: recentWorkouts?.[0], diasSemana: history.length,
+        humor, sleepHours, calorias: cals, comidas: [], ultimoTreino: recentWorkouts?.[0], diasSemana: history.length,
         exAvoided, exPrioritized, weightHistory: weightHistoryStr, recentHistory: recentWorkouts,
       })
 
+      const jsonFormat = ' Devuelve ÚNICAMENTE el JSON con esta estructura exacta, sin texto adicional: {"titulo":"...","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":N,"ejercicios":[{"nombre":"...","series":N,"repeticiones":"...","descripcion":"..."}]}'
       let prompt = humor === 'bajo'
-        ? 'Fernanda está cansada hoy. Genera un entrenamiento MUY ligero de no más de 20 minutos.'
+        ? 'Fernanda está cansada hoy. Genera un entrenamiento MUY ligero de no más de 20 minutos.' + jsonFormat
         : variant
-          ? `Fernanda quiere algo diferente. El anterior era ${treino?.muscle_group || 'fullbody'}. Genera una alternativa. Respeta los ejercicios a evitar.`
-          : 'Genera el entrenamiento de hoy para Fernanda basado en su plan de 5 días. Varía el grupo respecto al último. Incluye 4-6 ejercicios. Respeta ejercicios a evitar y prioriza los favoritos.'
+          ? `Fernanda quiere algo diferente. El anterior era ${treino?.muscle_group || 'fullbody'}. Genera una alternativa. Respeta los ejercicios a evitar.` + jsonFormat
+          : 'Genera el entrenamiento de hoy para Fernanda basado en su plan de 5 días. Varía el grupo respecto al último. Incluye 4-6 ejercicios. Respeta ejercicios a evitar y prioriza los favoritos.' + jsonFormat
 
       // 45s timeout para modelos gratuitos lentos
       const result = await Promise.race([
@@ -842,7 +961,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setSwappingExercise(exIndex)
     try {
       const ex = treino.ejercicios[exIndex]
-      const sp = buildSystemPrompt(profile, { humor, calorias: 0, comidas: [], ultimoTreino: null, diasSemana: history.length, exAvoided, exPrioritized, weightHistory: null })
+      const sp = buildSystemPrompt(profile, { humor, sleepHours, stressLevel, calorias: 0, comidas: [], ultimoTreino: null, diasSemana: history.length, exAvoided, exPrioritized, weightHistory: null })
       const result = await Promise.race([
         callClaude(claudeKey, sp,
           `Sugiere UN ejercicio alternativo similar a "${ex.nombre}" para el grupo muscular "${treino.grupo_muscular || treino.titulo}". ` +
@@ -1029,15 +1148,39 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                       {/* Expanded detail panel */}
                       {isExpanded && (
                         <div style={{ background: 'var(--border-light)', borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* Exercise photo */}
+                          {exerciseImages[i] === 'loading' && (
+                            <div style={{ width: '100%', height: '160px', borderRadius: '10px', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div className="spinner spinner-sm" />
+                            </div>
+                          )}
+                          {exerciseImages[i] && exerciseImages[i] !== 'loading' && (
+                            <img
+                              src={exerciseImages[i]}
+                              alt={ex.nombre}
+                              onError={() => setExerciseImages(prev => ({ ...prev, [i]: null }))}
+                              style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '10px', display: 'block' }}
+                            />
+                          )}
                           {ex.descripcion && (
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{ex.descripcion}</p>
                           )}
                           {hasSuggestion && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(232,115,90,0.08)', borderRadius: '8px', padding: '8px 10px' }}>
-                              <span style={{ fontSize: '1rem' }}>💡</span>
-                              <p style={{ fontSize: '0.82rem', color: 'var(--coral)', fontWeight: 600 }}>
-                                Última vez: {hasSuggestion}kg — intenta {Math.round(hasSuggestion * 1.025 / 2.5) * 2.5}kg hoy
-                              </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(232,115,90,0.08)', borderRadius: '8px', padding: '10px 12px' }}>
+                              <span style={{ fontSize: '1.1rem' }}>💡</span>
+                              <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: '0.82rem', color: 'var(--coral)', fontWeight: 700 }}>
+                                  Última vez: {hasSuggestion}kg → prueba {Math.round(hasSuggestion * 1.025 / 2.5) * 2.5}kg hoy
+                                </p>
+                              </div>
+                              {!weights[i] && (
+                                <button
+                                  onClick={() => setWeights(w => ({ ...w, [i]: String(Math.round(hasSuggestion * 1.025 / 2.5) * 2.5) }))}
+                                  style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                                >
+                                  Usar
+                                </button>
+                              )}
                             </div>
                           )}
                           <button
@@ -1623,6 +1766,8 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   const [loading, setLoading] = useState(false)
   const [initialLoad, setInitialLoad] = useState(true)
   const [pendingAction, setPendingAction] = useState(null)
+  const [pendingWorkoutAfterHumor, setPendingWorkoutAfterHumor] = useState(false)
+  const [pendingWorkoutText, setPendingWorkoutText] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
@@ -1653,6 +1798,47 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     setInitialLoad(false)
   }
 
+  const handleHumorSelect = async (level) => {
+    const today = new Date().toISOString().split('T')[0]
+    const { data: existingHd } = await supabase.from('humor_checkin').select('sleep_hours, stress_level').eq('date', today).maybeSingle()
+    await supabase.from('humor_checkin').upsert({ date: today, level, ...(existingHd?.sleep_hours && { sleep_hours: existingHd.sleep_hours }), ...(existingHd?.stress_level && { stress_level: existingHd.stress_level }) }, { onConflict: 'date' })
+
+    const labels = { alto: '¡Con esa energía te preparo algo intenso! 💪 Generando tu entrenamiento...', normal: '¡Perfecto, vamos a por ello! 💪 Generando tu entrenamiento...', bajo: 'Entendido, preparo algo suavecito para cuidarte hoy 🕊️ Generando...' }
+    const replyMsg = { id: Date.now(), role: 'assistant', content: labels[level] || '¡Vamos! Generando tu entrenamiento...' }
+    setMessages(m => [...m, replyMsg])
+    setPendingWorkoutAfterHumor(false)
+    setLoading(true)
+
+    const originalText = pendingWorkoutText
+    setPendingWorkoutText(null)
+
+    try {
+      const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const [{ data: meals }, { data: recentWorkouts }] = await Promise.all([
+        supabase.from('refeicoes').select('calories').eq('date', today),
+        supabase.from('treinos').select('date,muscle_group,intensity,exercises').order('date', { ascending: false }).gte('date', thirtyDaysAgo.toISOString().split('T')[0]).limit(30),
+      ])
+      const cals = meals?.reduce((s, m) => s + (m.calories || 0), 0) || 0
+      const baseSp = buildSystemPrompt(profile, { humor: level, sleepHours: existingHd?.sleep_hours ?? null, stressLevel: existingHd?.stress_level ?? null, calorias: cals, comidas: [], ultimoTreino: recentWorkouts?.[0], diasSemana: recentWorkouts?.length || 0, recentHistory: recentWorkouts })
+      const jsonFmt = ' Devuelve ÚNICAMENTE el JSON con esta estructura exacta, sin texto adicional: {"titulo":"...","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":N,"ejercicios":[{"nombre":"...","series":N,"repeticiones":"...","descripcion":"..."}]}'
+
+      const workout = await Promise.race([
+        callClaude(claudeKey, baseSp, `Fernanda pidió: "${originalText || 'un entrenamiento'}". Su humor hoy es: ${level}.${jsonFmt}`, true),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado')), 40000))
+      ])
+
+      if (workout?.titulo && Array.isArray(workout?.ejercicios)) {
+        setPendingAction({ type: 'generate_workout', workout, description: workout.titulo })
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: replyMsg.content }])
+      } else {
+        addToast('error', 'No se pudo generar el entrenamiento. Inténtalo de nuevo.')
+      }
+    } catch (e) {
+      addToast('error', `Error al generar: ${e.message}`)
+    }
+    setLoading(false)
+  }
+
   const sendMessage = async () => {
     const text = input.trim()
     if (!text || loading) return
@@ -1663,7 +1849,6 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     setLoading(true)
 
     try {
-      // Get today's context
       const today = new Date().toISOString().split('T')[0]
       const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const [{ data: hd }, { data: meals }, { data: recentWorkouts }] = await Promise.all([
@@ -1673,37 +1858,49 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
       ])
 
       const cals = meals?.reduce((s, m) => s + (m.calories || 0), 0) || 0
-      const sp = buildSystemPrompt(profile, {
-        humor: hd?.level, calorias: cals, comidas: meals || [],
-        ultimoTreino: recentWorkouts?.[0], diasSemana: recentWorkouts?.length || 0,
-        recentHistory: recentWorkouts,
-      })
+      const todayCtx = { humor: hd?.level, sleepHours: hd?.sleep_hours ?? null, stressLevel: hd?.stress_level ?? null, calorias: cals, comidas: meals || [], ultimoTreino: recentWorkouts?.[0], diasSemana: recentWorkouts?.length || 0, recentHistory: recentWorkouts }
+      const baseSp = buildSystemPrompt(profile, todayCtx)
 
-      // Build conversation history for context
-      const history = messages
-        .filter(m => m.id !== 'welcome')
-        .slice(-8)
-        .map(m => ({ role: m.role, content: m.content }))
+      // Detect intent
+      const isWorkoutReq = /treino|entrenamiento|ejercicio|exerc[ií]cio|entrena|workout|muscula|musculac|braço|braco|perna|abdomen|cardio|hombro|espalda|pecho|pierna/i.test(text)
+      const isMealLog = /com[ií]|almuerzo|desayuno|cena|snack|calorias|cal[oó]ria|comi|bebi|tomei|eat|comí|bev/i.test(text)
+
+      // If workout requested and no humor check-in yet today → ask first
+      if (isWorkoutReq && !hd?.level) {
+        const askMsg = { id: Date.now() + 1, role: 'assistant', content: '¡Vamos a por ese entrenamiento! 💪 Antes de prepararlo, cuéntame: ¿cómo te encuentras hoy? Así lo adapto perfectamente para ti.' }
+        setMessages(m => [...m, askMsg])
+        setPendingWorkoutText(text)
+        setPendingWorkoutAfterHumor(true)
+        await supabase.from('mensagens_agente').insert([{ role: 'user', content: text }, { role: 'assistant', content: askMsg.content }])
+        setLoading(false)
+        return
+      }
+
+      const history = messages.filter(m => m.id !== 'welcome').slice(-8).map(m => ({ role: m.role, content: m.content }))
       history.push({ role: 'user', content: text })
 
-      const formattedMessages = [
-        { role: 'system', content: sp },
-        ...history
-      ]
-
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      // Chat call — natural language response
+      const chatPromise = fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${claudeKey}`,
-          'HTTP-Referer': 'https://fitfernanda.app',
-          'X-Title': 'FitFernanda App',
-        },
-        body: JSON.stringify({
-          model: 'deepseek/deepseek-v4-flash',
-          messages: formattedMessages,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${claudeKey}`, 'HTTP-Referer': 'https://fitfernanda.app', 'X-Title': 'FitFernanda App' },
+        body: JSON.stringify({ model: 'deepseek/deepseek-v4-flash', messages: [{ role: 'system', content: baseSp }, ...history] }),
       })
+
+      // Parallel action call — if workout or meal detected, generate structured data directly
+      const jsonFmt = ' Devuelve ÚNICAMENTE el JSON con esta estructura exacta, sin texto adicional:'
+      const workoutPromise = isWorkoutReq
+        ? callClaude(claudeKey, baseSp, `Fernanda pidió: "${text}". Su humor hoy es: ${hd?.level || 'normal'}. Genera el entrenamiento apropiado.${jsonFmt} {"titulo":"...","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":N,"ejercicios":[{"nombre":"...","series":N,"repeticiones":"...","descripcion":"..."}]}`, true).catch(() => null)
+        : Promise.resolve(null)
+
+      const mealPromise = isMealLog && !isWorkoutReq
+        ? callClaude(claudeKey, baseSp, `Fernanda dijo: "${text}". Si menciona haber comido o bebido algo, extrae la información.${jsonFmt} {"description":"...","calories":N,"protein_g":N,"carbs_g":N,"fat_g":N,"meal_type":"desayuno|almuerzo|cena|snack"}`, true).catch(() => null)
+        : Promise.resolve(null)
+
+      // Wait for chat response (30s timeout)
+      const response = await Promise.race([
+        chatPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('La IA tardó demasiado. Inténtalo de nuevo.')), 30000))
+      ])
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
@@ -1712,27 +1909,55 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
       const data = await response.json()
       const reply = data.choices[0].message.content.trim()
 
-      // Parse action block
+      // Parse [ACCIÓN:] block from chat response (anywhere in the text)
       let cleanReply = reply
       let actionData = null
-      const actionMatch = reply.match(/\[ACCIÓN:([\s\S]+)\]\s*$/)
+      const actionMatch = reply.match(/\[ACCIÓN:(\{[\s\S]*\})\]/)
       if (actionMatch) {
         try { actionData = JSON.parse(actionMatch[1]) } catch {}
-        cleanReply = reply.replace(/\[ACCIÓN:[\s\S]+\]\s*$/, '').trim()
+        cleanReply = reply.replace(/\s*\[ACCIÓN:\{[\s\S]*\}\]\s*/, ' ').trim()
+      }
+
+      // Fallback 1: raw JSON object in the reply text
+      if (!actionData) {
+        const first = cleanReply.indexOf('{')
+        const last = cleanReply.lastIndexOf('}')
+        if (first !== -1 && last > first) {
+          try {
+            const parsed = JSON.parse(cleanReply.slice(first, last + 1))
+            if (parsed.titulo && Array.isArray(parsed.ejercicios)) {
+              actionData = { type: 'generate_workout', workout: parsed, description: parsed.titulo }
+              cleanReply = cleanReply.slice(0, first).trim() || `¡He preparado tu entrenamiento "${parsed.titulo}"! 💪🌸`
+            }
+          } catch {}
+        }
+      }
+
+      // Fallback 2: use parallel structured call results
+      if (!actionData && isWorkoutReq) {
+        const workout = await workoutPromise
+        if (workout?.titulo && Array.isArray(workout?.ejercicios)) {
+          actionData = { type: 'generate_workout', workout, description: workout.titulo }
+        }
+      }
+      if (!actionData && isMealLog && !isWorkoutReq) {
+        const meal = await mealPromise
+        if (meal?.description && meal?.calories) {
+          actionData = { type: 'log_meal', meal, description: `Registrar: ${meal.description}` }
+        }
       }
 
       const assistantMsg = { id: Date.now() + 1, role: 'assistant', content: cleanReply }
       setMessages(m => [...m, assistantMsg])
       if (actionData) setPendingAction(actionData)
 
-      // Save to Supabase
       await supabase.from('mensagens_agente').insert([
         { role: 'user', content: text },
         { role: 'assistant', content: cleanReply },
       ])
     } catch (e) {
-      addToast('error', `Error al enviar mensaje: ${e.message}`)
-      setMessages(m => m.filter(msg => msg.id !== userMsg.id))
+      const errMsg = { id: Date.now() + 1, role: 'assistant', content: `⚠️ ${e.message || 'Error al conectar con la IA. Inténtalo de nuevo.'}` }
+      setMessages(m => [...m, errMsg])
     }
     setLoading(false)
   }
@@ -1870,6 +2095,22 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
               </div>
             </div>
           )}
+          {pendingWorkoutAfterHumor && !loading && (
+            <div style={{ margin: '8px 0', background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.25)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '1rem' }}>💪</span>
+                <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>¿Cómo te sientes hoy?</p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[['alto', '🌟', 'Con energía'], ['normal', '😊', 'Normal'], ['bajo', '😓', 'Cansada']].map(([level, emoji, label]) => (
+                  <button key={level} className="btn btn-secondary btn-sm" style={{ flex: 1, flexDirection: 'column', gap: '4px', padding: '10px 4px' }} onClick={() => handleHumorSelect(level)}>
+                    <span style={{ fontSize: '1.2rem' }}>{emoji}</span>
+                    <span style={{ fontSize: '0.75rem' }}>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -1972,8 +2213,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
     age: profile?.age || '',
     activity_level: profile?.activity_level || 'Activa',
     physical_limitations: profile?.physical_limitations || '',
-    sleep_hours: profile?.sleep_hours || '',
-    stress_level: profile?.stress_level || 'Medio',
     preferred_workout_time: profile?.preferred_workout_time || 'Tarde',
   })
   const fileInputRef = useRef(null)
@@ -2019,8 +2258,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
       age: Number(personalForm.age) || null,
       activity_level: personalForm.activity_level || null,
       physical_limitations: personalForm.physical_limitations || null,
-      sleep_hours: Number(personalForm.sleep_hours) || null,
-      stress_level: personalForm.stress_level || null,
       preferred_workout_time: personalForm.preferred_workout_time || null,
     }).eq('name', 'Fernanda')
     if (!error) {
@@ -2219,20 +2456,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
               <label className="input-label">Lesiones o limitaciones físicas</label>
               <input className="input" value={personalForm.physical_limitations} onChange={e => setPersonalForm(f => ({ ...f, physical_limitations: e.target.value }))} placeholder="Ej: rodilla derecha, dolor de espalda... (opcional)" />
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <div className="input-group" style={{ flex: 1 }}>
-                <label className="input-label">Horas de sueño</label>
-                <input className="input" type="number" min="1" max="12" step="0.5" value={personalForm.sleep_hours} onChange={e => setPersonalForm(f => ({ ...f, sleep_hours: e.target.value }))} placeholder="7.5" />
-              </div>
-              <div className="input-group" style={{ flex: 1 }}>
-                <label className="input-label">Nivel de estrés</label>
-                <select className="input" value={personalForm.stress_level} onChange={e => setPersonalForm(f => ({ ...f, stress_level: e.target.value }))}>
-                  <option value="Bajo">Bajo</option>
-                  <option value="Medio">Medio</option>
-                  <option value="Alto">Alto</option>
-                </select>
-              </div>
-            </div>
             <div className="input-group">
               <label className="input-label">Horario preferido para entrenar</label>
               <select className="input" value={personalForm.preferred_workout_time} onChange={e => setPersonalForm(f => ({ ...f, preferred_workout_time: e.target.value }))}>
@@ -2262,16 +2485,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
             <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>{localProfile?.activity_level || '—'}</p>
               <p className="text-muted" style={{ fontSize: '0.75rem' }}>Nivel de actividad</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--coral)' }}>
-                {localProfile?.sleep_hours || '—'} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>{localProfile?.sleep_hours ? 'h' : ''}</span>
-              </p>
-              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Sueño</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--coral)' }}>{localProfile?.stress_level || '—'}</p>
-              <p className="text-muted" style={{ fontSize: '0.75rem' }}>Estrés</p>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>{localProfile?.preferred_workout_time || '—'}</p>
