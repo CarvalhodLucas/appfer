@@ -2222,9 +2222,9 @@ export default function App() {
 
   const checkConfiguration = async () => {
     setConfigError(null)
-    const url = import.meta.env.VITE_SUPABASE_URL
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-    const claude = import.meta.env.VITE_OPENROUTER_API_KEY
+    const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+    const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+    const claude = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 
     if (!url || !key || !claude) {
       const missing = [!url && 'VITE_SUPABASE_URL', !key && 'VITE_SUPABASE_ANON_KEY', !claude && 'VITE_OPENROUTER_API_KEY'].filter(Boolean)
