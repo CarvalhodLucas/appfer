@@ -2205,6 +2205,7 @@ export default function App() {
   const [isConfigured, setIsConfigured] = useState(false)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [configError, setConfigError] = useState(null)
   const [toasts, setToasts] = useState([])
   const [supabase, setSupabase] = useState(null)
   const [claudeKey, setClaudeKey] = useState('')
@@ -2220,11 +2221,14 @@ export default function App() {
   }, [])
 
   const checkConfiguration = async () => {
+    setConfigError(null)
     const url = import.meta.env.VITE_SUPABASE_URL
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY
     const claude = import.meta.env.VITE_OPENROUTER_API_KEY
 
     if (!url || !key || !claude) {
+      const missing = [!url && 'VITE_SUPABASE_URL', !key && 'VITE_SUPABASE_ANON_KEY', !claude && 'VITE_OPENROUTER_API_KEY'].filter(Boolean)
+      setConfigError(`Variables de entorno faltantes: ${missing.join(', ')}`)
       setLoading(false)
       return
     }
@@ -2234,12 +2238,15 @@ export default function App() {
       setSupabase(sb)
       setClaudeKey(claude)
 
-      const { data: profiles, error } = await sb.from('profiles').select('*').limit(1)
+      const { data: profiles, error } = await Promise.race([
+        sb.from('profiles').select('*').limit(1),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout: Supabase tardó más de 10s en responder')), 10000))
+      ])
       if (error) throw error
 
       if (!profiles || profiles.length === 0) {
         setLoading(false)
-        return // show onboarding to set up profile
+        return
       }
       setProfile(profiles[0])
       if (profiles[0].photo) {
@@ -2248,6 +2255,7 @@ export default function App() {
       setIsConfigured(true)
     } catch (e) {
       console.error('Error al conectar:', e)
+      setConfigError(e.message || 'Error desconocido al conectar con Supabase')
     }
     setLoading(false)
   }
@@ -2263,6 +2271,25 @@ export default function App() {
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.75rem', fontWeight: 700, color: 'var(--coral)' }}>FitFernanda</div>
         <div className="spinner" />
         <p className="text-muted" style={{ fontSize: '0.875rem' }}>Cargando tu app...</p>
+      </div>
+    )
+  }
+
+  if (configError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px', background: 'var(--bg)', padding: '24px' }}>
+        <div style={{ fontSize: '3rem' }}>🌸</div>
+        <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.75rem', fontWeight: 700, color: 'var(--coral)' }}>FitFernanda</div>
+        <div style={{ background: '#fff0ee', border: '1.5px solid var(--coral)', borderRadius: '12px', padding: '16px 20px', maxWidth: '360px', width: '100%', textAlign: 'center' }}>
+          <p style={{ fontWeight: 700, color: 'var(--coral)', marginBottom: '8px' }}>Error de conexión</p>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text)', fontFamily: 'monospace', wordBreak: 'break-word' }}>{configError}</p>
+        </div>
+        <button
+          onClick={() => { setLoading(true); checkConfiguration() }}
+          style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '999px', padding: '12px 28px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+        >
+          Reintentar
+        </button>
       </div>
     )
   }
