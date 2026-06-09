@@ -130,7 +130,7 @@ const callClaude = async (apiKey, systemPrompt, userMessage, isJson = false) => 
       'X-Title': 'FitFernanda App',
     },
     body: JSON.stringify({
-      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+      model: 'deepseek/deepseek-v4-flash',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage }
@@ -212,6 +212,7 @@ REGLAS DE COMPORTAMIENTO:
 8. Celebra cada pequeño logro con entusiasmo genuino
 9. Si tiene lesiones o limitaciones físicas → NUNCA incluyas ejercicios que las agraven; sugiere siempre alternativas seguras
 10. Usa la altura, el peso y la edad para dar recomendaciones calóricas y de progresión más precisas
+11. TEMA ESTRICTO: Solo respondes preguntas sobre entrenamiento, ejercicio, alimentación, nutrición, hábitos saludables, descanso o bienestar físico. Si Fernanda pregunta sobre cualquier otro tema, respóndele con cariño que solo puedes ayudarle con su entrenamiento y alimentación, y redirige la conversación a esos temas.
 
 CUANDO ESTIMES CALORÍAS, devuelve SOLO este JSON:
 {"descripcion":"Resumen","calorias":450,"proteina_g":35,"carbs_g":40,"grasa_g":12}
@@ -1699,7 +1700,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
           'X-Title': 'FitFernanda App',
         },
         body: JSON.stringify({
-          model: 'nvidia/nemotron-3-super-120b-a12b:free',
+          model: 'deepseek/deepseek-v4-flash',
           messages: formattedMessages,
         }),
       })
