@@ -278,8 +278,11 @@ const Onboarding = ({ onComplete }) => {
     if (step === 1) {
       setLoading(true)
       try {
-        const sb = initSupabase(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
-        const { error: profileErr } = await sb.from('profiles').insert({
+        const sb = initSupabase(
+          (import.meta.env.VITE_SUPABASE_URL || '').trim(),
+          (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+        )
+        const { error: profileErr } = await sb.from('profiles').upsert({
           name: 'Fernanda',
           goal: 'Adelgazar',
           level: 'Principiante',
@@ -288,10 +291,11 @@ const Onboarding = ({ onComplete }) => {
           food_dislikes: form.foodDislikes,
           current_weight: Number(form.weight) || null,
           goal_weight: Number(form.weightGoal) || null,
-        })
-        if (profileErr && profileErr.code !== '23505') throw profileErr
+        }, { onConflict: 'name' })
+        if (profileErr) console.error('Onboarding upsert error:', profileErr)
         onComplete()
-      } catch {
+      } catch (e) {
+        console.error('Onboarding error:', e)
         onComplete()
       }
       setLoading(false)
@@ -2342,6 +2346,7 @@ export default function App() {
       if (error) throw error
 
       if (!profiles || profiles.length === 0) {
+        console.warn('No profiles found — showing onboarding. If this is unexpected, check Supabase RLS policies on the profiles table.')
         setLoading(false)
         return
       }
