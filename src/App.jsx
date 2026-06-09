@@ -278,11 +278,12 @@ const Onboarding = ({ onComplete }) => {
     if (step === 1) {
       setLoading(true)
       try {
-        const sb = initSupabase(
-          (import.meta.env.VITE_SUPABASE_URL || '').trim(),
-          (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
-        )
-        const { error: profileErr } = await sb.from('profiles').upsert({
+        const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+        const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+        const sb = initSupabase(url, key)
+
+        // Try upsert first (works if UNIQUE constraint exists on name)
+        const { error: upsertErr } = await sb.from('profiles').upsert({
           name: 'Fernanda',
           goal: 'Adelgazar',
           level: 'Principiante',
@@ -292,7 +293,24 @@ const Onboarding = ({ onComplete }) => {
           current_weight: Number(form.weight) || null,
           goal_weight: Number(form.weightGoal) || null,
         }, { onConflict: 'name' })
-        if (profileErr) console.error('Onboarding upsert error:', profileErr)
+
+        if (upsertErr) {
+          // Fallback: plain insert (ignore duplicate errors)
+          const { error: insertErr } = await sb.from('profiles').insert({
+            name: 'Fernanda',
+            goal: 'Adelgazar',
+            level: 'Principiante',
+            daily_calories: form.dailyCalories,
+            food_likes: form.foodLikes,
+            food_dislikes: form.foodDislikes,
+            current_weight: Number(form.weight) || null,
+            goal_weight: Number(form.weightGoal) || null,
+          })
+          if (insertErr && insertErr.code !== '23505') {
+            console.error('Profile insert failed:', insertErr)
+          }
+        }
+
         onComplete()
       } catch (e) {
         console.error('Onboarding error:', e)
