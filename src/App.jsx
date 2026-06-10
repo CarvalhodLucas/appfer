@@ -147,8 +147,23 @@ const callClaude = async (apiKey, systemPrompt, userMessage, isJson = false) => 
   const text = data.choices[0].message.content.trim()
 
   if (isJson) {
-    const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
-    if (match) return JSON.parse(match[0])
+    // Strip markdown code fences, then extract JSON by counting balanced braces
+    const clean = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+    const start = clean.search(/[{[]/)
+    if (start !== -1) {
+      const opener = clean[start]
+      const closer = opener === '{' ? '}' : ']'
+      let depth = 0, inStr = false, esc = false
+      for (let i = start; i < clean.length; i++) {
+        const c = clean[i]
+        if (esc) { esc = false; continue }
+        if (c === '\\' && inStr) { esc = true; continue }
+        if (c === '"') { inStr = !inStr; continue }
+        if (inStr) continue
+        if (c === opener) depth++
+        if (c === closer && --depth === 0) return JSON.parse(clean.slice(start, i + 1))
+      }
+    }
     throw new Error('La IA no devolvió JSON válido')
   }
   return text
@@ -291,39 +306,30 @@ const Onboarding = ({ onComplete }) => {
         const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
         const sb = initSupabase(url, key)
 
-        // Try upsert first (works if UNIQUE constraint exists on name)
-        const { error: upsertErr } = await sb.from('profiles').upsert({
+        const profileData = {
           name: 'Fernanda',
           goal: 'Adelgazar',
           level: 'Principiante',
           daily_calories: form.dailyCalories,
           food_likes: form.foodLikes,
           food_dislikes: form.foodDislikes,
-          current_weight: Number(form.weight) || null,
-          goal_weight: Number(form.weightGoal) || null,
-        }, { onConflict: 'name' })
+        }
+
+        const { error: upsertErr } = await sb.from('profiles').upsert(profileData, { onConflict: 'name' })
 
         if (upsertErr) {
-          // Fallback: plain insert (ignore duplicate errors)
-          const { error: insertErr } = await sb.from('profiles').insert({
-            name: 'Fernanda',
-            goal: 'Adelgazar',
-            level: 'Principiante',
-            daily_calories: form.dailyCalories,
-            food_likes: form.foodLikes,
-            food_dislikes: form.foodDislikes,
-            current_weight: Number(form.weight) || null,
-            goal_weight: Number(form.weightGoal) || null,
-          })
+          const { error: insertErr } = await sb.from('profiles').insert(profileData)
           if (insertErr && insertErr.code !== '23505') {
-            console.error('Profile insert failed:', insertErr)
+            setError(`Error al guardar el perfil: ${insertErr.message}`)
+            setLoading(false)
+            return
           }
         }
 
+        localStorage.setItem('ff_onboarding_done', '1')
         onComplete()
       } catch (e) {
-        console.error('Onboarding error:', e)
-        onComplete()
+        setError(`Error de conexión: ${e.message}`)
       }
       setLoading(false)
     }
@@ -427,6 +433,7 @@ const Onboarding = ({ onComplete }) => {
         </div>
         <h2 className="step-title" style={{ marginBottom: '20px' }}>{steps[step].title}</h2>
         {steps[step].content}
+        {error && <p style={{ color: '#c0392b', fontSize: '0.82rem', marginTop: '12px', background: '#fff0ee', padding: '10px 12px', borderRadius: '8px', textAlign: 'center' }}>{error}</p>}
         <button
           className="btn btn-primary btn-lg"
           style={{ marginTop: '24px' }}
@@ -786,10 +793,11 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
   }, [])
 
   useEffect(() => {
-    if (expandedExercise !== null && treino?.ejercicios?.[expandedExercise]) {
-      loadExerciseImage(treino.ejercicios[expandedExercise].nombre, expandedExercise)
+    if (treino?.ejercicios?.length) {
+      setExerciseImages({})
+      treino.ejercicios.forEach((ex, i) => loadExerciseImage(ex.nombre, i, true))
     }
-  }, [expandedExercise])
+  }, [treino?.ejercicios])
 
   const normalizeTreino = (data) => ({
     ...data,
@@ -865,41 +873,75 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setView('today')
   }
 
-  const EXERCISE_EN = {
-    'hip thrust': 'hip thrust', 'peso muerto rumano': 'romanian deadlift', 'peso muerto': 'deadlift',
-    'sentadilla': 'squat', 'leg press': 'leg press', 'estocada': 'lunge', 'zancada': 'lunge',
-    'press de banca': 'bench press', 'banca inclinada': 'incline bench press', 'press inclinado': 'incline bench press',
-    'dominadas': 'pull-up', 'jalon': 'lat pulldown', 'jalón': 'lat pulldown', 'remo': 'bent over row',
-    'triceps polea': 'triceps pushdown', 'triceps': 'triceps extension', 'biceps': 'biceps curl',
-    'curl de biceps': 'biceps curl', 'curl': 'biceps curl', 'plancha': 'plank', 'crunch': 'crunch',
-    'russian twist': 'russian twist', 'abductor': 'hip abduction', 'patada': 'glute kickback',
-    'elevacion de piernas': 'leg raise', 'levantamiento de piernas': 'leg raise', 'press militar': 'shoulder press',
-    'press de hombros': 'shoulder press', 'elevaciones laterales': 'lateral raise', 'gemelos': 'calf raise',
-    'fondos': 'dip', 'burpee': 'burpee', 'mountain climber': 'mountain climber',
-    'peso corporal': 'bodyweight squat', 'sentadilla bulgara': 'bulgarian split squat',
-    'hip abduction': 'hip abduction', 'glute bridge': 'glute bridge',
-  }
+  // WGER exercise base IDs with confirmed images — keyed by Spanish keyword (lowercase, no accents)
+  const WGER_ID_MAP = [
+    ['hip thrust', 1642], ['glute bridge', 1642], ['puente de gluteo', 1642],
+    ['peso muerto rumano', 1652], ['romanian', 1652],
+    ['peso muerto', 184], ['deadlift', 184],
+    ['sentadilla bulgara', 1706], ['bulgarian', 1706],
+    ['sentadilla frontal', 257], ['front squat', 257],
+    ['sentadilla', 1801], ['squat', 1801],
+    ['leg press', 375], ['prensa', 375],
+    ['estocada', 984], ['zancada', 984], ['lunge', 984],
+    ['press de banca con mancuerna', 75], ['dumbbell bench', 75],
+    ['press de banca inclinado', 537], ['incline bench', 537], ['banca inclinada', 537],
+    ['press de banca', 73], ['bench press', 73],
+    ['press de hombros con mancuerna', 567], ['dumbbell shoulder', 567],
+    ['press militar', 1893], ['overhead press', 1893], ['press de hombros', 566],
+    ['dominadas', 475], ['pull-up', 475], ['pull up', 475],
+    ['jalon', 1635], ['jalón', 1635], ['lat pulldown', 1635],
+    ['remo con mancuerna', 1637], ['dumbbell row', 1637],
+    ['remo en polea', 921], ['remo sentado', 921], ['seated row', 921],
+    ['remo con barra', 83], ['barbell row', 83], ['remo', 83],
+    ['triceps en polea', 1185], ['triceps pushdown', 1185],
+    ['triceps aereo', 1519], ['triceps overhead', 1519], ['triceps', 659],
+    ['biceps con mancuerna', 92], ['curl con mancuerna', 92],
+    ['curl de biceps', 91], ['biceps', 91], ['curl', 91],
+    ['martillo', 272], ['hammer curl', 272],
+    ['plancha', 458], ['plank', 458],
+    ['crunch', 167], ['abdominales', 167],
+    ['russian twist', 1193],
+    ['patada de gluteo', 990], ['patada', 990], ['kickback', 990],
+    ['abductor', 1748], ['hip abduction', 1748],
+    ['elevaciones laterales', 348], ['lateral raise', 348],
+    ['elevaciones frontales', 256], ['front raise', 256],
+    ['gemelos', 1243], ['calf raise', 1243],
+    ['curl de femoral', 364], ['leg curl', 364], ['femoral', 364],
+    ['extension de cuadriceps', 369], ['leg extension', 369],
+    ['fondos', 194], ['dips', 194],
+    ['push up', 1551], ['flexiones', 1551],
+    ['hyperextension', 301], ['extension de espalda', 301],
+    ['face pull', 829],
+    ['press inclinado con mancuerna', 1277], ['incline dumbbell', 1277],
+    ['vuelos', 238], ['aperturas', 238], ['chest fly', 238],
+  ]
 
-  const getExerciseQuery = (nombre) => {
+  const getWgerIdForExercise = (nombre) => {
     const n = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
-    for (const [key, val] of Object.entries(EXERCISE_EN)) {
-      if (n.includes(key)) return val
+    for (const [keyword, id] of WGER_ID_MAP) {
+      if (n.includes(keyword)) return id
     }
-    return n
+    return null
   }
 
-  const loadExerciseImage = async (nombre, idx) => {
-    if (exerciseImages[idx] !== undefined) return
-    setExerciseImages(prev => ({ ...prev, [idx]: 'loading' }))
+  const loadExerciseImage = async (nombre, idx, force = false) => {
+    // Use functional update to guard against stale closure + concurrent calls
+    let skip = false
+    setExerciseImages(prev => {
+      if (!force && prev[idx] !== undefined) { skip = true; return prev }
+      return { ...prev, [idx]: 'loading' }
+    })
+    // Wait one tick so the functional update is applied before we check skip
+    await new Promise(r => setTimeout(r, 0))
+    if (skip) return
     try {
-      const q = encodeURIComponent(getExerciseQuery(nombre))
-      const r1 = await fetch(`https://wger.de/api/v2/exercise/?format=json&language=2&name=${q}&limit=3`)
-      const d1 = await r1.json()
-      for (const ex of (d1.results || [])) {
-        const r2 = await fetch(`https://wger.de/api/v2/exerciseimage/?format=json&exercise_base=${ex.exercise_base}&is_main=True&limit=1`)
-        const d2 = await r2.json()
-        if (d2.results?.length) {
-          setExerciseImages(prev => ({ ...prev, [idx]: `https://wger.de${d2.results[0].image}` }))
+      const wgerId = getWgerIdForExercise(nombre)
+      if (wgerId) {
+        const r = await fetch(`https://wger.de/api/v2/exerciseimage/?format=json&exercise=${wgerId}&limit=3`)
+        const d = await r.json()
+        if (d.results?.length) {
+          const main = d.results.find(i => i.is_main) || d.results[0]
+          setExerciseImages(prev => ({ ...prev, [idx]: main.image }))
           return
         }
       }
@@ -1116,6 +1158,16 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                         <button className={`exercise-checkbox ${checked[i] ? 'checked' : ''}`} onClick={() => toggleCheck(i)} id={`exercise-check-${i}`}>
                           {checked[i] && <Icon name="check" size={12} />}
                         </button>
+                        {/* Thumbnail */}
+                        <div style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, overflow: 'hidden', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {exerciseImages[i] === 'loading' && <div className="spinner spinner-sm" />}
+                          {exerciseImages[i] && exerciseImages[i] !== 'loading' && (
+                            <img src={exerciseImages[i]} alt="" onError={() => setExerciseImages(prev => ({ ...prev, [i]: null }))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                          {(exerciseImages[i] === null || exerciseImages[i] === undefined) && exerciseImages[i] !== 'loading' && (
+                            <Icon name="dumbbell" size={18} style={{ color: 'var(--text-muted)' }} />
+                          )}
+                        </div>
                         {/* Tappable name area */}
                         <button
                           onClick={() => setExpandedExercise(isExpanded ? null : i)}
@@ -1148,18 +1200,13 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                       {/* Expanded detail panel */}
                       {isExpanded && (
                         <div style={{ background: 'var(--border-light)', borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {/* Exercise photo */}
-                          {exerciseImages[i] === 'loading' && (
-                            <div style={{ width: '100%', height: '160px', borderRadius: '10px', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div className="spinner spinner-sm" />
-                            </div>
-                          )}
+                          {/* Exercise photo full size */}
                           {exerciseImages[i] && exerciseImages[i] !== 'loading' && (
                             <img
                               src={exerciseImages[i]}
                               alt={ex.nombre}
                               onError={() => setExerciseImages(prev => ({ ...prev, [i]: null }))}
-                              style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '10px', display: 'block' }}
+                              style={{ width: '100%', maxHeight: '220px', objectFit: 'cover', borderRadius: '10px', display: 'block' }}
                             />
                           )}
                           {ex.descripcion && (
@@ -2172,9 +2219,14 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         setNotifLoading(false)
         return
       }
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
+      if (!vapidKey) {
+        addToast('success', '¡Notificaciones activadas! 🔔 Recibirás un mensaje cada día a las 10h')
+        setNotifLoading(false)
+        return
+      }
       const reg = await navigator.serviceWorker.ready
       const existing = await reg.pushManager.getSubscription()
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -2630,7 +2682,9 @@ export default function App() {
       if (error) throw error
 
       if (!profiles || profiles.length === 0) {
-        console.warn('No profiles found — showing onboarding. If this is unexpected, check Supabase RLS policies on the profiles table.')
+        if (localStorage.getItem('ff_onboarding_done')) {
+          setConfigError('Perfil guardado pero no encontrado en la base de datos. Verifica que la política RLS de la tabla "profiles" permita lectura anónima (SELECT).')
+        }
         setLoading(false)
         return
       }
@@ -2650,7 +2704,8 @@ export default function App() {
   }
 
   const handleOnboardingComplete = () => {
-    window.location.reload()
+    setLoading(true)
+    checkConfiguration()
   }
 
   if (loading) {
