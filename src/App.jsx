@@ -1392,6 +1392,8 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
 const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [view, setView] = useState('log') // 'log' | 'history' | 'prefs'
   const [mealDesc, setMealDesc] = useState('')
+  const [mealListening, setMealListening] = useState(false)
+  const mealRecognitionRef = useRef(null)
   const [mealType, setMealType] = useState('almuerzo')
   const [calculated, setCalculated] = useState(null)
   const [calculating, setCalculating] = useState(false)
@@ -1408,6 +1410,25 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [expandedDay, setExpandedDay] = useState(null)
 
   const today = new Date().toISOString().split('T')[0]
+
+  const toggleMealListening = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { addToast('error', 'Tu navegador no soporta reconocimiento de voz'); return }
+    if (mealListening) { mealRecognitionRef.current?.stop(); setMealListening(false); return }
+    const rec = new SR()
+    rec.lang = 'es-ES'
+    rec.continuous = false
+    rec.interimResults = true
+    mealRecognitionRef.current = rec
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('')
+      setMealDesc(transcript)
+    }
+    rec.onerror = () => setMealListening(false)
+    rec.onend = () => setMealListening(false)
+    rec.start()
+    setMealListening(true)
+  }
 
   useEffect(() => { loadMeals() }, [])
 
@@ -1652,14 +1673,31 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
           {/* Log food */}
           <div className="card" id="log-food-card">
             <div className="section-title"><Icon name="salad" />¿Qué comiste?</div>
-            <div className="input-group mt-12">
+            <div className="input-group mt-12" style={{ position: 'relative' }}>
               <textarea
                 className="input"
-                placeholder="Ej: 200g de arroz con pollo, 1 plato de ensalada verde, 1 vaso de jugo..."
+                placeholder={mealListening ? '🎙️ Escuchando...' : 'Ej: 200g de arroz con pollo, 1 plato de ensalada verde, 1 vaso de jugo...'}
                 value={mealDesc}
                 onChange={e => setMealDesc(e.target.value)}
                 rows={3}
+                style={{ paddingRight: '52px' }}
               />
+              <button
+                onClick={toggleMealListening}
+                style={{
+                  position: 'absolute', top: '10px', right: '10px',
+                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  background: mealListening ? 'var(--coral)' : 'var(--border-light)',
+                  color: mealListening ? '#fff' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: mealListening ? '0 0 0 4px rgba(232,115,90,0.25)' : 'none',
+                  animation: mealListening ? 'pulse 1.2s infinite' : 'none',
+                  transition: 'background 0.2s, box-shadow 0.2s',
+                }}
+                title={mealListening ? 'Parar de escutar' : 'Falar o que comeu'}
+              >
+                <Icon name="microphone" size={16} />
+              </button>
             </div>
             <div className="input-group mt-8">
               <select className="select" value={mealType} onChange={e => setMealType(e.target.value)}>
@@ -1817,6 +1855,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef(null)
   const [pendingWorkoutText, setPendingWorkoutText] = useState(null)
+  const [humorLoading, setHumorLoading] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
@@ -1848,6 +1887,8 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   }
 
   const handleHumorSelect = async (level) => {
+    if (humorLoading) return
+    setHumorLoading(true)
     const today = new Date().toISOString().split('T')[0]
     const { data: existingHd } = await supabase.from('humor_checkin').select('sleep_hours, stress_level').eq('date', today).maybeSingle()
     await supabase.from('humor_checkin').upsert({ date: today, level, ...(existingHd?.sleep_hours && { sleep_hours: existingHd.sleep_hours }), ...(existingHd?.stress_level && { stress_level: existingHd.stress_level }) }, { onConflict: 'date' })
@@ -1886,6 +1927,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
       addToast('error', `Error al generar: ${e.message}`)
     }
     setLoading(false)
+    setHumorLoading(false)
   }
 
   const sendMessage = async () => {
@@ -2161,7 +2203,14 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
                   {pendingAction.type === 'generate_workout' ? 'Entrenamiento listo' : pendingAction.type === 'log_meal' ? 'Registrar comida' : 'Coach Fit propone un cambio'}
                 </p>
               </div>
-              <p style={{ fontSize: '0.9rem', marginBottom: '14px' }}>{pendingAction.description}</p>
+              <p style={{ fontSize: '0.9rem', marginBottom: pendingAction.type === 'generate_workout' && pendingAction.workout?.ejercicios?.length ? '8px' : '14px' }}>{pendingAction.description}</p>
+              {pendingAction.type === 'generate_workout' && pendingAction.workout?.ejercicios?.length > 0 && (
+                <ul style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '14px', paddingLeft: '16px', lineHeight: 1.6 }}>
+                  {pendingAction.workout.ejercicios.map((ex, i) => (
+                    <li key={i}><strong>{ex.nombre}</strong> — {ex.series} series × {ex.repeticiones}</li>
+                  ))}
+                </ul>
+              )}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setPendingAction(null)}>Cancelar</button>
                 <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={executeAction}>
@@ -2179,7 +2228,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[['alto', '🌟', 'Con energía'], ['normal', '😊', 'Normal'], ['bajo', '😓', 'Cansada']].map(([level, emoji, label]) => (
-                  <button key={level} className="btn btn-secondary btn-sm" style={{ flex: 1, flexDirection: 'column', gap: '4px', padding: '10px 4px' }} onClick={() => handleHumorSelect(level)}>
+                  <button key={level} className="btn btn-secondary btn-sm" style={{ flex: 1, flexDirection: 'column', gap: '4px', padding: '10px 4px', opacity: humorLoading ? 0.5 : 1 }} disabled={humorLoading} onClick={() => handleHumorSelect(level)}>
                     <span style={{ fontSize: '1.2rem' }}>{emoji}</span>
                     <span style={{ fontSize: '0.75rem' }}>{label}</span>
                   </button>
