@@ -1814,6 +1814,8 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   const [initialLoad, setInitialLoad] = useState(true)
   const [pendingAction, setPendingAction] = useState(null)
   const [pendingWorkoutAfterHumor, setPendingWorkoutAfterHumor] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef(null)
   const [pendingWorkoutText, setPendingWorkoutText] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
@@ -2089,6 +2091,33 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
   }
 
+  const toggleListening = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { addToast('error', 'Tu navegador no soporta reconocimiento de voz'); return }
+
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+
+    const rec = new SR()
+    rec.lang = 'es-ES'
+    rec.continuous = false
+    rec.interimResults = true
+    recognitionRef.current = rec
+
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('')
+      setInput(transcript)
+    }
+    rec.onerror = () => setListening(false)
+    rec.onend = () => setListening(false)
+
+    rec.start()
+    setListening(true)
+  }
+
   if (initialLoad) return (
     <div className="loading-wrap">
       <div className="spinner" />
@@ -2164,10 +2193,25 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
 
       {/* Input area */}
       <div className="chat-input-area">
+        <button
+          onClick={toggleListening}
+          style={{
+            flexShrink: 0, width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: listening ? 'var(--coral)' : 'var(--border-light)',
+            color: listening ? '#fff' : 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: listening ? '0 0 0 4px rgba(232,115,90,0.25)' : 'none',
+            animation: listening ? 'pulse 1.2s infinite' : 'none',
+            transition: 'background 0.2s, box-shadow 0.2s',
+          }}
+          title={listening ? 'Parar de escutar' : 'Falar com Coach Fit'}
+        >
+          <Icon name={listening ? 'microphone' : 'microphone'} size={18} />
+        </button>
         <textarea
           ref={textareaRef}
           className="input"
-          placeholder="Pregúntale algo a Coach Fit..."
+          placeholder={listening ? '🎙️ Escuchando...' : 'Pregúntale algo a Coach Fit...'}
           value={input}
           onChange={e => { setInput(e.target.value); autoResize(e) }}
           onKeyDown={handleKeyDown}

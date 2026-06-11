@@ -1039,6 +1039,11 @@ textarea.input {
   to { transform: rotate(360deg); }
 }
 
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(232,115,90,0.25); }
+  50% { box-shadow: 0 0 0 10px rgba(232,115,90,0.08); }
+}
+
 .loading-text {
   font-size: 0.9375rem;
   color: var(--text-muted);
