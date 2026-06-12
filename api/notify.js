@@ -44,16 +44,24 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  webpush.setVapidDetails(
-    `mailto:${process.env.VAPID_EMAIL}`,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  )
+  const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY
+  const vapidEmail = process.env.VAPID_EMAIL
 
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL.trim(),
-    process.env.SUPABASE_SERVICE_ROLE_KEY.trim()
-  )
+  if (!vapidPublic || !vapidPrivate || !vapidEmail) {
+    return res.status(500).json({ error: 'Missing VAPID env vars', vapidPublic: !!vapidPublic, vapidPrivate: !!vapidPrivate, vapidEmail: !!vapidEmail })
+  }
+
+  webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'your-service-role-key-here') {
+    return res.status(500).json({ error: 'Missing or invalid SUPABASE_SERVICE_ROLE_KEY' })
+  }
+
+  const supabase = createClient(supabaseUrl.trim(), supabaseServiceKey.trim())
 
   const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
   if (error) return res.status(500).json({ error: error.message })

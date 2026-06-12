@@ -2657,13 +2657,33 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
             Recibe un mensaje motivacional todos los días a las 10h de la mañana de Coach Fit 🌸
           </p>
           {notifStatus === 'granted' ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
+                  {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
+                </button>
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
-                {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
+              <button
+                className="btn btn-secondary btn-sm w-full"
+                disabled={notifLoading}
+                onClick={async () => {
+                  setNotifLoading(true)
+                  try {
+                    const res = await fetch('/api/notify', { method: 'POST' })
+                    const data = await res.json()
+                    if (!res.ok) addToast('error', `Error: ${data.error || res.status}`)
+                    else addToast('success', `✅ Notificación enviada (${data.sent} enviadas)`)
+                  } catch (e) {
+                    addToast('error', `Error al enviar: ${e.message}`)
+                  }
+                  setNotifLoading(false)
+                }}
+              >
+                <Icon name="bell" size={14} />Enviar notificación de prueba
               </button>
             </div>
           ) : notifStatus === 'denied' ? (
