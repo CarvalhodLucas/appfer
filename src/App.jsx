@@ -2684,8 +2684,8 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
                     const res = await fetch('/api/notify', { method: 'POST' })
                     let data
                     try { data = await res.json() } catch { data = {} }
-                    if (!res.ok) addToast('error', `${data.error || res.status} [key:${data.keyPrefix || '?'}]`)
-                    else if (data.sent === 0) addToast('error', `${data.message} [key:${data.keyPrefix || '?'}]`)
+                    if (!res.ok) addToast('error', `${data.error || res.status} | ${JSON.stringify(data.debug || {})}`)
+                    else if (data.sent === 0) addToast('error', `${data.message} | ${JSON.stringify(data.debug || {})}`)
                     else addToast('success', `✅ Notificación enviada! (${data.sent} enviadas)`)
                   } catch (e) {
                     addToast('error', `Falha de rede: ${e.message}`)

@@ -69,11 +69,16 @@ export default async function handler(req, res) {
 
     webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
 
-    const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim())
+    const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim(), {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
 
-    const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
-    if (error) return res.status(500).json({ error: `Supabase error: ${error.message}`, keyPrefix: supabaseKey.slice(0, 20) })
-    if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found', keyPrefix: supabaseKey.slice(0, 20), subsCount: subs?.length ?? 'null' })
+    const { data: subs, error, count } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, subscription', { count: 'exact' })
+    const debug = { url: supabaseUrl.slice(-20), keyRole: supabaseKey.includes('service_role') ? 'service_role' : 'anon_or_other', count }
+    if (error) return res.status(500).json({ error: `Supabase error: ${error.message}`, debug })
+    if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found', debug })
 
     const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
