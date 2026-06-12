@@ -72,8 +72,8 @@ export default async function handler(req, res) {
     const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim())
 
     const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
-    if (error) return res.status(500).json({ error: `Supabase error: ${error.message}` })
-    if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found. Make sure push_subscriptions table exists and a subscription is saved.' })
+    if (error) return res.status(500).json({ error: `Supabase error: ${error.message}`, keyPrefix: supabaseKey.slice(0, 20) })
+    if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found', keyPrefix: supabaseKey.slice(0, 20), subsCount: subs?.length ?? 'null' })
 
     const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
