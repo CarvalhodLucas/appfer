@@ -2314,7 +2314,7 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
       }
       const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
       if (!vapidKey) {
-        addToast('success', '¡Notificaciones activadas! 🔔 Recibirás un mensaje cada día a las 10h')
+        addToast('error', 'Falta a variável VITE_VAPID_PUBLIC_KEY no Vercel. Renomeia VITE_VAPID_CHAVE_PÚBLICA → VITE_VAPID_PUBLIC_KEY.')
         setNotifLoading(false)
         return
       }

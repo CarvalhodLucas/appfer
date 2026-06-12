@@ -45,8 +45,8 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    // Accept both VITE_ prefixed and unprefixed env var names
-    const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+    // Accept multiple possible env var names (including old Portuguese name)
+    const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || process.env['VITE_VAPID_CHAVE_PÚBLICA']
     const vapidPrivate = process.env.VAPID_PRIVATE_KEY
     const vapidEmail = process.env.VAPID_EMAIL
 
