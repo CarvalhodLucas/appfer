@@ -2319,15 +2319,23 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         return
       }
       const reg = await navigator.serviceWorker.ready
+      // Unsubscribe any existing subscription (may use old VAPID key)
       const existing = await reg.pushManager.getSubscription()
-      const sub = existing || await reg.pushManager.subscribe({
+      if (existing) await existing.unsubscribe()
+
+      const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
-      await supabase.from('push_subscriptions').upsert(
+      const { error: upsertErr } = await supabase.from('push_subscriptions').upsert(
         { endpoint: sub.endpoint, subscription: sub.toJSON() },
         { onConflict: 'endpoint' }
       )
+      if (upsertErr) {
+        addToast('error', `Error al guardar suscripción: ${upsertErr.message}`)
+        setNotifLoading(false)
+        return
+      }
       addToast('success', '¡Notificaciones activadas! 🔔 Recibirás un mensaje cada día a las 10h')
     } catch (e) {
       addToast('error', `Error: ${e.message}`)
