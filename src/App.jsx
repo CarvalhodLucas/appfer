@@ -2674,11 +2674,13 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
                   setNotifLoading(true)
                   try {
                     const res = await fetch('/api/notify', { method: 'POST' })
-                    const data = await res.json()
-                    if (!res.ok) addToast('error', `Error: ${data.error || res.status}`)
-                    else addToast('success', `✅ Notificación enviada (${data.sent} enviadas)`)
+                    let data
+                    try { data = await res.json() } catch { data = {} }
+                    if (!res.ok) addToast('error', data.error || `HTTP ${res.status}`)
+                    else if (data.sent === 0) addToast('error', data.message || 'Nenhuma subscrição encontrada')
+                    else addToast('success', `✅ Notificación enviada! (${data.sent} enviadas)`)
                   } catch (e) {
-                    addToast('error', `Error al enviar: ${e.message}`)
+                    addToast('error', `Falha de rede: ${e.message}`)
                   }
                   setNotifLoading(false)
                 }}

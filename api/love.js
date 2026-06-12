@@ -44,16 +44,19 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  webpush.setVapidDetails(
-    `mailto:${process.env.VAPID_EMAIL}`,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  )
+  const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY
+  const vapidEmail = process.env.VAPID_EMAIL
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL.trim(),
-    process.env.SUPABASE_SERVICE_ROLE_KEY.trim()
-  )
+  if (!vapidPublic || !vapidPrivate || !supabaseUrl || !supabaseKey || supabaseKey === 'your-service-role-key-here') {
+    return res.status(500).json({ error: 'Missing env vars' })
+  }
+
+  webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
+
+  const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim())
 
   const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
   if (error) return res.status(500).json({ error: error.message })
@@ -62,7 +65,10 @@ export default async function handler(req, res) {
   const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
   const results = await Promise.allSettled(
-    subs.map(row => webpush.sendNotification(row.subscription, JSON.stringify(msg)))
+    subs.map(row => {
+      const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
+      return webpush.sendNotification(sub, JSON.stringify(msg))
+    })
   )
 
   const expired = results

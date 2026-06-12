@@ -35,54 +35,70 @@ const MESSAGES = [
 ]
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  try {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' })
+    }
+
+    const authHeader = req.headers.authorization
+    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Accept both VITE_ prefixed and unprefixed env var names
+    const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY
+    const vapidEmail = process.env.VAPID_EMAIL
+
+    if (!vapidPublic || !vapidPrivate || !vapidEmail) {
+      return res.status(500).json({
+        error: 'Missing VAPID configuration',
+        debug: { vapidPublic: !!vapidPublic, vapidPrivate: !!vapidPrivate, vapidEmail: !!vapidEmail }
+      })
+    }
+
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl) {
+      return res.status(500).json({ error: 'Missing SUPABASE URL env var' })
+    }
+    if (!supabaseKey || supabaseKey === 'your-service-role-key-here') {
+      return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY is missing or still has the placeholder value. Go to Supabase → Project Settings → API → service_role key and add it to Vercel env vars.' })
+    }
+
+    webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
+
+    const supabase = createClient(supabaseUrl.trim(), supabaseKey.trim())
+
+    const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
+    if (error) return res.status(500).json({ error: `Supabase error: ${error.message}` })
+    if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found. Make sure push_subscriptions table exists and a subscription is saved.' })
+
+    const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
+
+    const results = await Promise.allSettled(
+      subs.map(row => {
+        // Handle both JSONB (object) and TEXT (string) column types
+        const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
+        return webpush.sendNotification(sub, JSON.stringify(msg))
+      })
+    )
+
+    const expired = results
+      .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i].endpoint : null)
+      .filter(Boolean)
+    if (expired.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('endpoint', expired)
+    }
+
+    const failures = results.filter(r => r.status === 'rejected')
+    return res.json({
+      sent: results.filter(r => r.status === 'fulfilled').length,
+      failed: failures.length,
+      errors: failures.map(r => r.reason?.message || String(r.reason)).slice(0, 3),
+    })
+  } catch (err) {
+    return res.status(500).json({ error: err.message || String(err) })
   }
-
-  const authHeader = req.headers.authorization
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-
-  const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY
-  const vapidPrivate = process.env.VAPID_PRIVATE_KEY
-  const vapidEmail = process.env.VAPID_EMAIL
-
-  if (!vapidPublic || !vapidPrivate || !vapidEmail) {
-    return res.status(500).json({ error: 'Missing VAPID env vars', vapidPublic: !!vapidPublic, vapidPrivate: !!vapidPrivate, vapidEmail: !!vapidEmail })
-  }
-
-  webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'your-service-role-key-here') {
-    return res.status(500).json({ error: 'Missing or invalid SUPABASE_SERVICE_ROLE_KEY' })
-  }
-
-  const supabase = createClient(supabaseUrl.trim(), supabaseServiceKey.trim())
-
-  const { data: subs, error } = await supabase.from('push_subscriptions').select('endpoint, subscription')
-  if (error) return res.status(500).json({ error: error.message })
-  if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions' })
-
-  const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
-
-  const results = await Promise.allSettled(
-    subs.map(row => webpush.sendNotification(row.subscription, JSON.stringify(msg)))
-  )
-
-  // Remove expired/invalid subscriptions
-  const expired = results
-    .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i].endpoint : null)
-    .filter(Boolean)
-  if (expired.length > 0) {
-    await supabase.from('push_subscriptions').delete().in('endpoint', expired)
-  }
-
-  return res.json({
-    sent: results.filter(r => r.status === 'fulfilled').length,
-    failed: results.filter(r => r.status === 'rejected').length,
-  })
 }
