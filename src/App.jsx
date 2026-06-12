@@ -1415,6 +1415,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [loadingCalHistory, setLoadingCalHistory] = useState(false)
   const [expandedDay, setExpandedDay] = useState(null)
   const [frequentMeals, setFrequentMeals] = useState([])
+  const carouselRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -1759,9 +1760,28 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
             <div className="card card-sm">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <p style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mis favoritas</p>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Toca para añadir</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginRight: '4px' }}>Toca para añadir</span>
+                  {[{ dir: -1, icon: '‹' }, { dir: 1, icon: '›' }].map(({ dir, icon }) => (
+                    <button
+                      key={dir}
+                      onClick={() => carouselRef.current?.scrollBy({ left: dir * 150, behavior: 'smooth' })}
+                      style={{
+                        width: '26px', height: '26px', borderRadius: '50%',
+                        border: '1.5px solid rgba(232,115,90,0.25)',
+                        background: 'rgba(232,115,90,0.07)',
+                        color: 'var(--coral)', fontSize: '1.1rem', lineHeight: 1,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)',
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--coral)'; e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(232,115,90,0.07)'; e.currentTarget.style.color = 'var(--coral)' }}
+                    >{icon}</button>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <div ref={carouselRef} style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {frequentMeals.map((meal, i) => {
                   const MEAL_ICONS = { desayuno: '🌅', almuerzo: '☀️', cena: '🌙', snack: '🍎' }
                   const icon = MEAL_ICONS[meal.meal_type] || '🍽️'
