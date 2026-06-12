@@ -29,6 +29,9 @@ const Icon = ({ name, size = 22, ...props }) => {
     info: <><path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></>,
     trash: <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />,
     clock: <><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></>,
+    microphone: <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75M8.25 21h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />,
+    bell: <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />,
+    'bell-off': <path strokeLinecap="round" strokeLinejoin="round" d="M9.143 17.082a24.248 24.248 0 0 0 3.844.148m-3.844-.148a23.856 23.856 0 0 1-5.455-1.31 8.964 8.964 0 0 0 2.3-5.542m3.155 6.852a3 3 0 0 0 5.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 0 0 .126-1.785 8.942 8.942 0 0 0-.59-3.165M6.53 6.53A5.97 5.97 0 0 0 6 9v.75a8.964 8.964 0 0 1-2.169 5.837L21 21M6.53 6.53 3 3" />,
   }
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
@@ -173,7 +176,7 @@ const callClaude = async (apiKey, systemPrompt, userMessage, isJson = false) => 
 // SYSTEM PROMPT BUILDER
 // ============================================================
 const buildSystemPrompt = (profile, todayData) => {
-  const { humor, calorias, comidas, ultimoTreino, diasSemana, exAvoided, exPrioritized, weightHistory, recentHistory } = todayData
+  const { humor, calorias, comidas, ultimoTreino, diasSemana, exAvoided, exPrioritized, weightHistory, recentHistory, mealHistory } = todayData
   const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   return `Eres Coach Fit 🌸, la entrenadora personal y nutricionista virtual de Fernanda.
@@ -201,6 +204,9 @@ CONTEXTO DE HOY ${today}:
 - Días entrenados esta semana: ${diasSemana || 0}
 - Calorías consumidas hoy: ${calorias || 0} de ${profile?.daily_calories || 1500} kcal meta
 - Lo que comió hoy: ${comidas?.map(c => c.description).join(', ') || 'nada registrado aún'}
+${mealHistory?.length ? `
+HISTORIAL DE COMIDAS (últimos 7 días):
+${mealHistory.map(d => `• ${d.date}: ${d.meals.join(', ')} (${d.cals} kcal)`).join('\n')}` : ''}
 
 HISTORIAL DE ENTRENAMIENTO (últimos 30 días):
 ${recentHistory?.length
@@ -1942,14 +1948,25 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     try {
       const today = new Date().toISOString().split('T')[0]
       const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const [{ data: hd }, { data: meals }, { data: recentWorkouts }] = await Promise.all([
+      const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const [{ data: hd }, { data: meals }, { data: recentWorkouts }, { data: recentMeals }] = await Promise.all([
         supabase.from('humor_checkin').select('level').eq('date', today).single(),
         supabase.from('refeicoes').select('*').eq('date', today),
         supabase.from('treinos').select('date,muscle_group,intensity,exercises').order('date', { ascending: false }).gte('date', thirtyDaysAgo.toISOString().split('T')[0]).limit(30),
+        supabase.from('refeicoes').select('date,description,calories').gte('date', sevenDaysAgo.toISOString().split('T')[0]).order('date', { ascending: false }),
       ])
 
       const cals = meals?.reduce((s, m) => s + (m.calories || 0), 0) || 0
-      const todayCtx = { humor: hd?.level, sleepHours: hd?.sleep_hours ?? null, stressLevel: hd?.stress_level ?? null, calorias: cals, comidas: meals || [], ultimoTreino: recentWorkouts?.[0], diasSemana: recentWorkouts?.length || 0, recentHistory: recentWorkouts }
+      // Group recent meals by date for context
+      const mealsByDate = {}
+      recentMeals?.forEach(m => {
+        if (m.date === today) return // today already in comidas
+        if (!mealsByDate[m.date]) mealsByDate[m.date] = { cals: 0, meals: [] }
+        mealsByDate[m.date].cals += m.calories || 0
+        if (m.description) mealsByDate[m.date].meals.push(m.description)
+      })
+      const mealHistory = Object.entries(mealsByDate).map(([date, v]) => ({ date, cals: Math.round(v.cals), meals: v.meals })).slice(0, 7)
+      const todayCtx = { humor: hd?.level, sleepHours: hd?.sleep_hours ?? null, stressLevel: hd?.stress_level ?? null, calorias: cals, comidas: meals || [], ultimoTreino: recentWorkouts?.[0], diasSemana: recentWorkouts?.length || 0, recentHistory: recentWorkouts, mealHistory }
       const baseSp = buildSystemPrompt(profile, todayCtx)
 
       // Detect intent
@@ -2336,7 +2353,7 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         setNotifLoading(false)
         return
       }
-      addToast('success', '¡Notificaciones activadas! 🔔 Recibirás un mensaje cada día a las 10h')
+      addToast('success', 'Notificação ativada! 🔔')
     } catch (e) {
       addToast('error', `Error: ${e.message}`)
     }
@@ -2665,35 +2682,13 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
             Recibe un mensaje motivacional todos los días a las 10h de la mañana de Coach Fit 🌸
           </p>
           {notifStatus === 'granted' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
-                </div>
-                <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
-                  {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
-                </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
               </div>
-              <button
-                className="btn btn-secondary btn-sm w-full"
-                disabled={notifLoading}
-                onClick={async () => {
-                  setNotifLoading(true)
-                  try {
-                    const res = await fetch('/api/notify', { method: 'POST' })
-                    let data
-                    try { data = await res.json() } catch { data = {} }
-                    if (!res.ok) addToast('error', data.error || `HTTP ${res.status}`)
-                    else if (data.sent === 0) addToast('error', data.errors?.[0] || data.message || 'Sem subscrições')
-                    else addToast('success', `✅ Notificación enviada! (${data.sent} enviadas)`)
-                  } catch (e) {
-                    addToast('error', `Falha de rede: ${e.message}`)
-                  }
-                  setNotifLoading(false)
-                }}
-              >
-                <Icon name="bell" size={14} />Enviar notificación de prueba
+              <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
+                {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
               </button>
             </div>
           ) : notifStatus === 'denied' ? (
