@@ -1712,36 +1712,6 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
           </div>
 
-          {/* Frequent meals quick-add */}
-          {frequentMeals.length > 0 && (
-            <div className="card card-sm">
-              <div className="section-title" style={{ marginBottom: '12px' }}>⚡ Comidas frecuentes</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {frequentMeals.map((meal, i) => (
-                  <button
-                    key={i}
-                    onClick={() => saveFrequentMeal(meal)}
-                    style={{
-                      background: 'var(--nude-light)', border: '1.5px solid var(--border-light)',
-                      borderRadius: 'var(--radius-md)', padding: '8px 12px',
-                      cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)',
-                      transition: 'var(--transition)',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--coral)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-light)'}
-                  >
-                    <p style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.3 }}>
-                      {meal.description.length > 40 ? meal.description.slice(0, 38) + '…' : meal.description}
-                    </p>
-                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      {meal.calories} kcal · {meal.count}× usada
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Log food */}
           <div className="card" id="log-food-card">
             <div className="section-title"><Icon name="salad" />¿Qué comiste?</div>
@@ -1783,6 +1753,57 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
               {calculating ? <><div className="spinner spinner-sm" />Calculando...</> : <><Icon name="sparkles" size={16} />Calcular Calorías</>}
             </button>
           </div>
+
+          {/* Frequent meals quick-add */}
+          {frequentMeals.length > 0 && (
+            <div className="card card-sm">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <p style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mis favoritas</p>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Toca para añadir</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {frequentMeals.map((meal, i) => {
+                  const MEAL_ICONS = { desayuno: '🌅', almuerzo: '☀️', cena: '🌙', snack: '🍎' }
+                  const icon = MEAL_ICONS[meal.meal_type] || '🍽️'
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => saveFrequentMeal(meal)}
+                      style={{
+                        flexShrink: 0, width: '130px',
+                        background: 'linear-gradient(150deg, #fff 0%, rgba(232,115,90,0.05) 100%)',
+                        border: '1.5px solid rgba(232,115,90,0.18)',
+                        borderRadius: '16px', padding: '14px 12px',
+                        cursor: 'pointer', textAlign: 'left',
+                        fontFamily: 'var(--font-body)', transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--coral)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(232,115,90,0.18)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                    >
+                      <span style={{ fontSize: '1.3rem', display: 'block', marginBottom: '8px' }}>{icon}</span>
+                      <p style={{
+                        fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)',
+                        lineHeight: 1.35, marginBottom: '10px',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden', minHeight: '2.1em',
+                      }}>
+                        {meal.description}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--coral)' }}>{meal.calories} kcal</span>
+                        <span style={{
+                          width: '22px', height: '22px', borderRadius: '50%',
+                          background: 'rgba(232,115,90,0.12)', color: 'var(--coral)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '1rem', fontWeight: 700, lineHeight: 1,
+                        }}>+</span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {calculated && (
             <div className="card card-nude" id="meal-result-card">
