@@ -1414,6 +1414,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [calHistory, setCalHistory] = useState([])
   const [loadingCalHistory, setLoadingCalHistory] = useState(false)
   const [expandedDay, setExpandedDay] = useState(null)
+  const [frequentMeals, setFrequentMeals] = useState([])
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -1436,7 +1437,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setMealListening(true)
   }
 
-  useEffect(() => { loadMeals() }, [])
+  useEffect(() => { loadMeals(); loadFrequentMeals() }, [])
 
   useEffect(() => {
     if (view === 'history' && calHistory.length === 0) loadCalHistory()
@@ -1445,6 +1446,23 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const loadMeals = async () => {
     const { data } = await supabase.from('refeicoes').select('*').eq('date', today).order('created_at')
     setTodayMeals(data || [])
+  }
+
+  const loadFrequentMeals = async () => {
+    const from = new Date(); from.setDate(from.getDate() - 60)
+    const { data } = await supabase.from('refeicoes')
+      .select('description, calories, protein_g, carbs_g, fat_g, meal_type')
+      .gte('date', from.toISOString().split('T')[0])
+      .not('description', 'is', null)
+    if (!data) return
+    const counts = {}
+    for (const m of data) {
+      const key = m.description.trim().toLowerCase()
+      if (!counts[key]) counts[key] = { description: m.description, calories: m.calories, protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, meal_type: m.meal_type, count: 0 }
+      counts[key].count++
+    }
+    const sorted = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 8)
+    setFrequentMeals(sorted)
   }
 
   const loadCalHistory = async () => {
@@ -1505,6 +1523,24 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
       addToast('error', 'Error al guardar la comida')
     }
     setSaving(false)
+  }
+
+  const saveFrequentMeal = async (meal) => {
+    try {
+      await supabase.from('refeicoes').insert({
+        date: today,
+        meal_type: meal.meal_type || 'almuerzo',
+        description: meal.description,
+        calories: meal.calories,
+        protein_g: meal.protein_g,
+        carbs_g: meal.carbs_g,
+        fat_g: meal.fat_g,
+      })
+      addToast('success', `${meal.description} guardado! 🥗`)
+      loadMeals()
+    } catch {
+      addToast('error', 'Error al guardar')
+    }
   }
 
   const getSuggestions = async () => {
@@ -1675,6 +1711,36 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
               ))}
             </div>
           </div>
+
+          {/* Frequent meals quick-add */}
+          {frequentMeals.length > 0 && (
+            <div className="card card-sm">
+              <div className="section-title" style={{ marginBottom: '12px' }}>⚡ Comidas frecuentes</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {frequentMeals.map((meal, i) => (
+                  <button
+                    key={i}
+                    onClick={() => saveFrequentMeal(meal)}
+                    style={{
+                      background: 'var(--nude-light)', border: '1.5px solid var(--border-light)',
+                      borderRadius: 'var(--radius-md)', padding: '8px 12px',
+                      cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)',
+                      transition: 'var(--transition)',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--coral)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-light)'}
+                  >
+                    <p style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px', lineHeight: 1.3 }}>
+                      {meal.description.length > 40 ? meal.description.slice(0, 38) + '…' : meal.description}
+                    </p>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {meal.calories} kcal · {meal.count}× usada
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Log food */}
           <div className="card" id="log-food-card">
