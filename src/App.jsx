@@ -1415,6 +1415,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [loadingCalHistory, setLoadingCalHistory] = useState(false)
   const [expandedDay, setExpandedDay] = useState(null)
   const [frequentMeals, setFrequentMeals] = useState([])
+  const [confirmMeal, setConfirmMeal] = useState(null)
   const carouselRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1793,7 +1794,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                   return (
                     <button
                       key={i}
-                      onClick={() => saveFrequentMeal(meal)}
+                      onClick={() => setConfirmMeal({ ...meal })}
                       style={{
                         flexShrink: 0, width: '130px',
                         background: 'linear-gradient(150deg, #fff 0%, rgba(232,115,90,0.05) 100%)',
@@ -1970,6 +1971,91 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
             Guardar Preferencias
           </button>
         </>
+      )}
+
+      {/* Confirm frequent meal modal */}
+      {confirmMeal && (
+        <div
+          onClick={() => setConfirmMeal(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: '24px 24px 0 0',
+              padding: '24px 20px 32px', width: '100%', maxWidth: '480px',
+              boxShadow: '0 -8px 40px rgba(0,0,0,0.15)',
+              animation: 'slideUp 0.25s ease',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Confirmar comida</p>
+              <button onClick={() => setConfirmMeal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>Descripción</label>
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={confirmMeal.description}
+                  onChange={e => setConfirmMeal(p => ({ ...p, description: e.target.value }))}
+                  style={{ fontSize: '0.875rem', resize: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {[
+                  { key: 'calories', label: 'Calorías', unit: 'kcal' },
+                  { key: 'protein_g', label: 'Proteína', unit: 'g' },
+                  { key: 'carbs_g', label: 'Carbos', unit: 'g' },
+                  { key: 'fat_g', label: 'Grasa', unit: 'g' },
+                ].map(({ key, label, unit }) => (
+                  <div key={key}>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>{label} ({unit})</label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={confirmMeal[key] ?? ''}
+                      onChange={e => setConfirmMeal(p => ({ ...p, [key]: Number(e.target.value) }))}
+                      style={{ fontSize: '0.875rem' }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>Tipo de comida</label>
+                <select className="select" value={confirmMeal.meal_type || 'almuerzo'} onChange={e => setConfirmMeal(p => ({ ...p, meal_type: e.target.value }))}>
+                  <option value="desayuno">🌅 Desayuno</option>
+                  <option value="almuerzo">☀️ Almuerzo</option>
+                  <option value="cena">🌙 Cena</option>
+                  <option value="snack">🍎 Snack</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setConfirmMeal(null)}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 2 }}
+                onClick={async () => {
+                  await saveFrequentMeal(confirmMeal)
+                  setConfirmMeal(null)
+                }}
+              >
+                <Icon name="check" size={16} />Guardar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
