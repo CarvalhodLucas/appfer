@@ -1526,6 +1526,11 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setSaving(false)
   }
 
+  const deleteMeal = async (id) => {
+    await supabase.from('refeicoes').delete().eq('id', id)
+    loadMeals()
+  }
+
   const saveFrequentMeal = async (meal) => {
     try {
       await supabase.from('refeicoes').insert({
@@ -1854,12 +1859,27 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
               <div className="section-title"><Icon name="clock" />Lo que comiste hoy</div>
               <div style={{ marginTop: '12px' }}>
                 {todayMeals.map((m, i) => (
-                  <div key={i} className="meal-item">
+                  <div key={m.id || i} className="meal-item">
                     <div className="meal-info">
                       <p className="meal-name">{m.description}</p>
                       <span className="meal-type-badge">{m.meal_type}</span>
                     </div>
-                    <span className="meal-calories">{m.calories} kcal</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span className="meal-calories">{m.calories} kcal</span>
+                      <button
+                        onClick={() => deleteMeal(m.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                          color: 'var(--text-muted)', display: 'flex', alignItems: 'center',
+                          opacity: 0.5, transition: 'opacity 0.15s, color 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--coral)' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = 0.5; e.currentTarget.style.color = 'var(--text-muted)' }}
+                        title="Eliminar"
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
