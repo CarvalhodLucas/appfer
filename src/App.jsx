@@ -1530,6 +1530,15 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const deleteMeal = async (id) => {
     await supabase.from('refeicoes').delete().eq('id', id)
     loadMeals()
+    loadCalHistory()
+  }
+
+  const updateMeal = async (meal) => {
+    const { id, description, calories, protein_g, carbs_g, fat_g, meal_type } = meal
+    await supabase.from('refeicoes').update({ description, calories, protein_g, carbs_g, fat_g, meal_type }).eq('id', id)
+    addToast('success', 'Comida actualizada ✓')
+    loadMeals()
+    loadCalHistory()
   }
 
   const saveFrequentMeal = async (meal) => {
@@ -1671,13 +1680,29 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                     {isOpen && (
                       <div style={{ borderTop: '1px solid var(--border-light)', padding: '10px 16px 14px' }}>
                         {day.meals.map((m, i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '8px 0', borderBottom: i < day.meals.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                            <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '1px' }}>{MEAL_ICONS[m.meal_type] || '🍽️'}</span>
+                          <div key={m.id || i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '8px 0', borderBottom: i < day.meals.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                            <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '2px' }}>{MEAL_ICONS[m.meal_type] || '🍽️'}</span>
                             <div style={{ flex: 1 }}>
                               <p style={{ fontSize: '0.875rem', fontWeight: 500 }}>{m.description}</p>
                               <p className="text-muted" style={{ fontSize: '0.75rem' }}>{m.meal_type} · P {m.protein_g || 0}g · C {m.carbs_g || 0}g · G {m.fat_g || 0}g</p>
                             </div>
-                            <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--coral)', flexShrink: 0 }}>{m.calories}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--coral)', marginRight: '4px' }}>{m.calories}</span>
+                              <button
+                                onClick={() => setConfirmMeal({ ...m })}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-muted)', display: 'flex', opacity: 0.5, transition: 'opacity 0.15s, color 0.15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--nude-dark)' }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = 0.5; e.currentTarget.style.color = 'var(--text-muted)' }}
+                                title="Editar"
+                              ><Icon name="pencil" size={14} /></button>
+                              <button
+                                onClick={() => deleteMeal(m.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-muted)', display: 'flex', opacity: 0.5, transition: 'opacity 0.15s, color 0.15s' }}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--coral)' }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = 0.5; e.currentTarget.style.color = 'var(--text-muted)' }}
+                                title="Eliminar"
+                              ><Icon name="trash" size={14} /></button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -2047,7 +2072,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                 className="btn btn-primary"
                 style={{ flex: 2 }}
                 onClick={async () => {
-                  await saveFrequentMeal(confirmMeal)
+                  if (confirmMeal.id) { await updateMeal(confirmMeal) } else { await saveFrequentMeal(confirmMeal) }
                   setConfirmMeal(null)
                 }}
               >
