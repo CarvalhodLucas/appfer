@@ -1419,6 +1419,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const carouselRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
+  const [logDate, setLogDate] = useState(today)
 
   const toggleMealListening = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -1439,14 +1440,15 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setMealListening(true)
   }
 
-  useEffect(() => { loadMeals(); loadFrequentMeals() }, [])
+  useEffect(() => { loadMeals(logDate); loadFrequentMeals() }, [])
+  useEffect(() => { loadMeals(logDate) }, [logDate])
 
   useEffect(() => {
     if (view === 'history' && calHistory.length === 0) loadCalHistory()
   }, [view])
 
-  const loadMeals = async () => {
-    const { data } = await supabase.from('refeicoes').select('*').eq('date', today).order('created_at')
+  const loadMeals = async (date) => {
+    const { data } = await supabase.from('refeicoes').select('*').eq('date', date || logDate).order('created_at')
     setTodayMeals(data || [])
   }
 
@@ -1508,7 +1510,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setSaving(true)
     try {
       const { error } = await supabase.from('refeicoes').insert({
-        date: today,
+        date: logDate,
         meal_type: mealType,
         description: calculated.descripcion || mealDesc,
         calories: calculated.calorias,
@@ -1544,7 +1546,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const saveFrequentMeal = async (meal) => {
     try {
       await supabase.from('refeicoes').insert({
-        date: today,
+        date: meal.date || today,
         meal_type: meal.meal_type || 'almuerzo',
         description: meal.description,
         calories: meal.calories,
@@ -1715,6 +1717,24 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
         </>
       ) : view === 'log' ? (
         <>
+          {/* Date selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: logDate !== today ? 'rgba(232,115,90,0.06)' : 'var(--surface)', border: '1.5px solid', borderColor: logDate !== today ? 'rgba(232,115,90,0.25)' : 'var(--border-light)', borderRadius: '14px' }}>
+            <Icon name="clock" size={16} style={{ color: logDate !== today ? 'var(--coral)' : 'var(--text-muted)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: logDate !== today ? 'var(--coral)' : 'var(--text-muted)', flex: 1 }}>
+              {logDate === today ? 'Registrando para hoy' : `Registrando para ${new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+            </span>
+            <input
+              type="date"
+              max={today}
+              value={logDate}
+              onChange={e => setLogDate(e.target.value)}
+              style={{ border: 'none', background: 'none', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none', padding: 0 }}
+            />
+            {logDate !== today && (
+              <button onClick={() => setLogDate(today)} style={{ background: 'var(--coral)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.72rem', fontWeight: 600, padding: '4px 8px', cursor: 'pointer', fontFamily: 'var(--font-body)', flexShrink: 0 }}>Hoy</button>
+            )}
+          </div>
+
           {/* Daily summary */}
           <div className="card" id="nutrition-summary-card">
             <div className="section-title"><Icon name="fire" />Resumen del día</div>
@@ -1781,6 +1801,13 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                 <option value="snack">🍎 Snack</option>
               </select>
             </div>
+            {logDate !== today && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 4px', padding: '7px 12px', background: 'rgba(232,115,90,0.07)', borderRadius: '10px', border: '1px solid rgba(232,115,90,0.2)' }}>
+                <Icon name="clock" size={14} style={{ color: 'var(--coral)', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.78rem', color: 'var(--coral)', fontWeight: 600 }}>Registrando para {new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                <button onClick={() => setLogDate(today)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.72rem', padding: '2px 6px' }}>Hoy</button>
+              </div>
+            )}
             <button className="btn btn-primary w-full mt-12" onClick={calculateMeal} disabled={calculating || !mealDesc.trim()} id="calculate-meal-btn">
               {calculating ? <><div className="spinner spinner-sm" />Calculando...</> : <><Icon name="sparkles" size={16} />Calcular Calorías</>}
             </button>
@@ -1819,7 +1846,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                   return (
                     <button
                       key={i}
-                      onClick={() => setConfirmMeal({ ...meal })}
+                      onClick={() => setConfirmMeal({ ...meal, date: logDate })}
                       style={{
                         flexShrink: 0, width: '130px',
                         background: 'linear-gradient(150deg, #fff 0%, rgba(232,115,90,0.05) 100%)',
@@ -1882,7 +1909,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
           {/* Today's meals */}
           {todayMeals.length > 0 && (
             <div className="card">
-              <div className="section-title"><Icon name="clock" />Lo que comiste hoy</div>
+              <div className="section-title"><Icon name="clock" />{logDate === today ? 'Lo que comiste hoy' : `Lo que comiste el ${new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}</div>
               <div style={{ marginTop: '12px' }}>
                 {todayMeals.map((m, i) => (
                   <div key={m.id || i} className="meal-item">
@@ -2055,14 +2082,20 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                 ))}
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>Tipo de comida</label>
-                <select className="select" value={confirmMeal.meal_type || 'almuerzo'} onChange={e => setConfirmMeal(p => ({ ...p, meal_type: e.target.value }))}>
-                  <option value="desayuno">🌅 Desayuno</option>
-                  <option value="almuerzo">☀️ Almuerzo</option>
-                  <option value="cena">🌙 Cena</option>
-                  <option value="snack">🍎 Snack</option>
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>Tipo de comida</label>
+                  <select className="select" value={confirmMeal.meal_type || 'almuerzo'} onChange={e => setConfirmMeal(p => ({ ...p, meal_type: e.target.value }))}>
+                    <option value="desayuno">🌅 Desayuno</option>
+                    <option value="almuerzo">☀️ Almuerzo</option>
+                    <option value="cena">🌙 Cena</option>
+                    <option value="snack">🍎 Snack</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '4px' }}>Fecha</label>
+                  <input type="date" className="input" max={today} value={confirmMeal.date || today} onChange={e => setConfirmMeal(p => ({ ...p, date: e.target.value }))} style={{ fontSize: '0.875rem' }} />
+                </div>
               </div>
             </div>
 
