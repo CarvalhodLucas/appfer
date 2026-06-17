@@ -102,9 +102,10 @@ export default async function handler(req, res) {
       results.push(...await send({ title: '🌙 ¿Cenaste ayer, Fer?', body: 'Ayer no registraste tu cena. ¡Completa tu diario para tener un seguimiento más preciso!' }))
     }
 
-    // 2. Love message every 3rd day (days 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
-    const dayOfMonth = new Date().getUTCDate()
-    if (dayOfMonth % 3 === 1) {
+    // 2. Love message every 3 days from fixed epoch (exact interval, no month-boundary drift)
+    const EPOCH = Date.UTC(2026, 0, 1) // Jan 1, 2026
+    const daysSinceEpoch = Math.floor((Date.now() - EPOCH) / 86_400_000)
+    if (daysSinceEpoch % 3 === 0) {
       const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
       results.push(...await send(msg))
     }
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
     return res.json({
       sent: results.filter(r => r.status === 'fulfilled').length,
       mealStatus: hasMeals && hasCena ? 'green' : hasMeals ? 'yellow' : 'red',
-      loveDay: dayOfMonth % 3 === 1,
+      loveDay: daysSinceEpoch % 3 === 0,
       debug,
     })
   } catch (err) {
