@@ -1416,6 +1416,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [expandedDay, setExpandedDay] = useState(null)
   const [calMonth, setCalMonth] = useState(() => new Date())
   const [monthMeals, setMonthMeals] = useState({})
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const [frequentMeals, setFrequentMeals] = useState([])
   const [confirmMeal, setConfirmMeal] = useState(null)
   const carouselRef = useRef(null)
@@ -1442,7 +1443,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setMealListening(true)
   }
 
-  useEffect(() => { loadMeals(logDate); loadFrequentMeals() }, [])
+  useEffect(() => { loadMeals(logDate); loadFrequentMeals(); loadMonthMeals(calMonth) }, [])
   useEffect(() => { loadMeals(logDate) }, [logDate])
 
   useEffect(() => {
@@ -1798,22 +1799,79 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
       ) : view === 'log' ? (
         <>
           {/* Date selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: logDate !== today ? 'rgba(232,115,90,0.06)' : 'var(--surface)', border: '1.5px solid', borderColor: logDate !== today ? 'rgba(232,115,90,0.25)' : 'var(--border-light)', borderRadius: '14px' }}>
+          <button
+            onClick={() => setShowDatePicker(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', width: '100%', background: logDate !== today ? 'rgba(232,115,90,0.06)' : 'var(--surface)', border: '1.5px solid', borderColor: logDate !== today ? 'rgba(232,115,90,0.25)' : 'var(--border-light)', borderRadius: '14px', cursor: 'pointer', fontFamily: 'var(--font-body)', textAlign: 'left' }}
+          >
             <Icon name="clock" size={16} style={{ color: logDate !== today ? 'var(--coral)' : 'var(--text-muted)', flexShrink: 0 }} />
             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: logDate !== today ? 'var(--coral)' : 'var(--text-muted)', flex: 1 }}>
               {logDate === today ? 'Registrando para hoy' : `Registrando para ${new Date(logDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}`}
             </span>
-            <input
-              type="date"
-              max={today}
-              value={logDate}
-              onChange={e => setLogDate(e.target.value)}
-              style={{ border: 'none', background: 'none', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none', padding: 0 }}
-            />
-            {logDate !== today && (
-              <button onClick={() => setLogDate(today)} style={{ background: 'var(--coral)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.72rem', fontWeight: 600, padding: '4px 8px', cursor: 'pointer', fontFamily: 'var(--font-body)', flexShrink: 0 }}>Hoy</button>
-            )}
-          </div>
+            {logDate !== today
+              ? <span onClick={e => { e.stopPropagation(); setLogDate(today) }} style={{ background: 'var(--coral)', borderRadius: '8px', color: '#fff', fontSize: '0.72rem', fontWeight: 600, padding: '4px 8px', flexShrink: 0 }}>Hoy</span>
+              : <Icon name="chevron-down" size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            }
+          </button>
+
+          {/* Custom date picker modal */}
+          {showDatePicker && (() => {
+            const now = new Date()
+            const y = calMonth.getFullYear()
+            const m = calMonth.getMonth()
+            const daysInMonth = new Date(y, m + 1, 0).getDate()
+            const firstDay = new Date(y, m, 1).getDay()
+            const startOffset = firstDay === 0 ? 6 : firstDay - 1
+            const cells = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+            const monthName = new Date(y, m, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+            const isCurrentMonth = y === now.getFullYear() && m === now.getMonth()
+            const DAY_NAMES = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+            const arrowStyle = { background: 'rgba(232,115,90,0.08)', border: '1.5px solid rgba(232,115,90,0.2)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--coral)', fontSize: '1.1rem', lineHeight: 1, padding: 0, fontFamily: 'var(--font-body)', flexShrink: 0 }
+            return (
+              <div onClick={() => setShowDatePicker(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '24px 24px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: '480px', animation: 'slideUp 0.25s ease' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <button style={arrowStyle} onClick={() => { const prev = new Date(y, m - 1, 1); setCalMonth(prev); loadMonthMeals(prev) }}>‹</button>
+                    <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', textTransform: 'capitalize' }}>{monthName}</p>
+                    <button style={{ ...arrowStyle, opacity: isCurrentMonth ? 0.3 : 1, cursor: isCurrentMonth ? 'default' : 'pointer' }} onClick={() => { if (!isCurrentMonth) { const next = new Date(y, m + 1, 1); setCalMonth(next); loadMonthMeals(next) } }}>›</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '6px' }}>
+                    {DAY_NAMES.map(d => <p key={d} style={{ textAlign: 'center', fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', padding: '2px 0' }}>{d}</p>)}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px' }}>
+                    {cells.map((day, i) => {
+                      if (!day) return <div key={i} />
+                      const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                      const isFuture = dateStr > today
+                      const isToday = dateStr === today
+                      const isSelected = dateStr === logDate
+                      const d = monthMeals[dateStr]
+                      let bg = 'rgba(0,0,0,0.04)'
+                      let textColor = '#ccc'
+                      if (!isFuture) {
+                        if (!d?.hasMeals) { bg = '#fee2e2'; textColor = '#dc2626' }
+                        else if (!d?.hasCena) { bg = '#fef9c3'; textColor = '#ca8a04' }
+                        else { bg = '#dcfce7'; textColor = '#16a34a' }
+                      }
+                      if (isSelected) { bg = 'var(--coral)'; textColor = '#fff' }
+                      return (
+                        <button key={i} disabled={isFuture} onClick={() => { setLogDate(dateStr); setShowDatePicker(false) }} style={{ aspectRatio: '1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, border: isToday && !isSelected ? '2px solid var(--coral)' : 'none', cursor: isFuture ? 'default' : 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: isToday || isSelected ? 700 : 500, color: textColor, lineHeight: 1 }}>{day}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: '14px', marginTop: '14px', justifyContent: 'center' }}>
+                    {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Sin cena', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
+                      <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: bg, border: `1px solid ${color}33` }} />
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Daily summary */}
           <div className="card" id="nutrition-summary-card">
