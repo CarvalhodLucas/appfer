@@ -88,16 +88,18 @@ export default async function handler(req, res) {
 
     const results = []
 
-    // 1. Check today's meals → send reminder if yellow or red
-    const todayStr = new Date().toISOString().split('T')[0]
-    const { data: todayMeals } = await supabase.from('refeicoes').select('meal_type').eq('date', todayStr)
-    const hasMeals = (todayMeals?.length || 0) > 0
-    const hasCena = todayMeals?.some(m => m.meal_type === 'cena') || false
+    // 1. Check YESTERDAY's meals → send reminder if yellow or red
+    const yesterday = new Date()
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+    const { data: ydMeals } = await supabase.from('refeicoes').select('meal_type').eq('date', yesterdayStr)
+    const hasMeals = (ydMeals?.length || 0) > 0
+    const hasCena = ydMeals?.some(m => m.meal_type === 'cena') || false
 
     if (!hasMeals) {
-      results.push(...await send({ title: '🍽️ Fer, ¿qué comiste hoy?', body: 'Aún no registraste nada hoy. Entra al app y anota tus comidas para llevar un buen seguimiento 📊' }))
+      results.push(...await send({ title: '🍽️ Fer, ¿registraste todo ayer?', body: 'No encontré ninguna comida registrada de ayer. ¡Entra al app y anota lo que comiste para llevar un buen seguimiento! 📊' }))
     } else if (!hasCena) {
-      results.push(...await send({ title: '🌙 ¿Ya cenaste, Fer?', body: 'Recuerda registrar tu cena en el app para completar el diario de hoy.' }))
+      results.push(...await send({ title: '🌙 ¿Cenaste ayer, Fer?', body: 'Ayer no registraste tu cena. ¡Completa tu diario para tener un seguimiento más preciso!' }))
     }
 
     // 2. Love message every 3rd day (days 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
@@ -108,8 +110,7 @@ export default async function handler(req, res) {
     }
 
     // Clean up expired subscriptions
-    const allResults = [...results]
-    const expired = allResults
+    const expired = results
       .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i % subs.length]?.endpoint : null)
       .filter(Boolean)
     if (expired.length > 0) {
@@ -117,7 +118,7 @@ export default async function handler(req, res) {
     }
 
     return res.json({
-      sent: allResults.filter(r => r.status === 'fulfilled').length,
+      sent: results.filter(r => r.status === 'fulfilled').length,
       mealStatus: hasMeals && hasCena ? 'green' : hasMeals ? 'yellow' : 'red',
       loveDay: dayOfMonth % 3 === 1,
       debug,
