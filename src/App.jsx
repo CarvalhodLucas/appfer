@@ -1509,9 +1509,10 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     const { data } = await supabase.from('refeicoes').select('date, meal_type').gte('date', from).lte('date', to)
     const map = {}
     data?.forEach(row => {
-      if (!map[row.date]) map[row.date] = { hasMeals: false, hasCena: false }
+      if (!map[row.date]) map[row.date] = { hasMeals: false, hasCena: false, hasComida: false }
       map[row.date].hasMeals = true
       if (row.meal_type === 'cena') map[row.date].hasCena = true
+      else map[row.date].hasComida = true
     })
     setMonthMeals(map)
   }
@@ -1682,8 +1683,8 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                     let textColor = '#ccc'
                     if (!isFuture) {
                       if (!d?.hasMeals) { bg = '#fee2e2'; textColor = '#dc2626' }
-                      else if (!d?.hasCena) { bg = '#fef9c3'; textColor = '#ca8a04' }
-                      else { bg = '#dcfce7'; textColor = '#16a34a' }
+                      else if (d?.hasCena && d?.hasComida) { bg = '#dcfce7'; textColor = '#16a34a' }
+                      else { bg = '#fef9c3'; textColor = '#ca8a04' }
                     }
                     return (
                       <div key={i} style={{ aspectRatio: '1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, outline: isToday ? '2px solid var(--coral)' : 'none', outlineOffset: '1px' }}>
@@ -1693,7 +1694,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                   })}
                 </div>
                 <div style={{ display: 'flex', gap: '14px', marginTop: '12px', justifyContent: 'center' }}>
-                  {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Sin cena', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
+                  {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Incompleto', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
                     <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                       <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: bg, border: `1px solid ${color}22` }} />
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{text}</span>
@@ -1849,8 +1850,8 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                       let textColor = '#ccc'
                       if (!isFuture) {
                         if (!d?.hasMeals) { bg = '#fee2e2'; textColor = '#dc2626' }
-                        else if (!d?.hasCena) { bg = '#fef9c3'; textColor = '#ca8a04' }
-                        else { bg = '#dcfce7'; textColor = '#16a34a' }
+                        else if (d?.hasCena && d?.hasComida) { bg = '#dcfce7'; textColor = '#16a34a' }
+                        else { bg = '#fef9c3'; textColor = '#ca8a04' }
                       }
                       if (isSelected) { bg = 'var(--coral)'; textColor = '#fff' }
                       return (
@@ -1861,7 +1862,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
                     })}
                   </div>
                   <div style={{ display: 'flex', gap: '14px', marginTop: '14px', justifyContent: 'center' }}>
-                    {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Sin cena', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
+                    {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Incompleto', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
                       <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: bg, border: `1px solid ${color}33` }} />
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{text}</span>

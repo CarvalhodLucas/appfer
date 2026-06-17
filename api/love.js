@@ -95,11 +95,17 @@ export default async function handler(req, res) {
     const { data: ydMeals } = await supabase.from('refeicoes').select('meal_type').eq('date', yesterdayStr)
     const hasMeals = (ydMeals?.length || 0) > 0
     const hasCena = ydMeals?.some(m => m.meal_type === 'cena') || false
+    const hasComida = ydMeals?.some(m => m.meal_type !== 'cena') || false
 
     if (!hasMeals) {
       results.push(...await send({ title: '🍽️ Fer, ¿registraste todo ayer?', body: 'No encontré ninguna comida registrada de ayer. ¡Entra al app y anota lo que comiste para llevar un buen seguimiento! 📊' }))
+    } else if (!hasCena && !hasComida) {
+      // no debería pasar, pero por seguridad
+      results.push(...await send({ title: '🍽️ Fer, ¿registraste todo ayer?', body: 'No encontré ninguna comida registrada de ayer. ¡Entra al app y anota lo que comiste! 📊' }))
     } else if (!hasCena) {
       results.push(...await send({ title: '🌙 ¿Cenaste ayer, Fer?', body: 'Ayer no registraste tu cena. ¡Completa tu diario para tener un seguimiento más preciso!' }))
+    } else if (!hasComida) {
+      results.push(...await send({ title: '🍳 ¿Comiste bien ayer, Fer?', body: 'Ayer solo registraste la cena. ¿Qué comiste durante el día? ¡Añádelo para un seguimiento completo!' }))
     }
 
     // 2. Love message every 3 days from fixed epoch (exact interval, no month-boundary drift)
@@ -120,7 +126,7 @@ export default async function handler(req, res) {
 
     return res.json({
       sent: results.filter(r => r.status === 'fulfilled').length,
-      mealStatus: hasMeals && hasCena ? 'green' : hasMeals ? 'yellow' : 'red',
+      mealStatus: (hasCena && hasComida) ? 'green' : hasMeals ? 'yellow' : 'red',
       loveDay: daysSinceEpoch % 3 === 0,
       debug,
     })
