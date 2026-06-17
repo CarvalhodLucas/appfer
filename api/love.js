@@ -79,27 +79,48 @@ export default async function handler(req, res) {
     if (error) return res.status(500).json({ error: `Supabase error: ${error.message}`, debug })
     if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found', debug })
 
-    const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
-
-    const results = await Promise.allSettled(
+    const send = (msg) => Promise.allSettled(
       subs.map(row => {
         const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
         return webpush.sendNotification(sub, JSON.stringify(msg))
       })
     )
 
-    const expired = results
-      .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i].endpoint : null)
-      .filter(Boolean)
-    if (expired.length > 0) {
-      await supabase.from('push_subscriptions').delete().in('endpoint', expired)
+    const results = []
+
+    // 1. Check today's meals → send reminder if yellow or red
+    const todayStr = new Date().toISOString().split('T')[0]
+    const { data: todayMeals } = await supabase.from('refeicoes').select('meal_type').eq('date', todayStr)
+    const hasMeals = (todayMeals?.length || 0) > 0
+    const hasCena = todayMeals?.some(m => m.meal_type === 'cena') || false
+
+    if (!hasMeals) {
+      results.push(...await send({ title: '🍽️ Fer, ¿qué comiste hoy?', body: 'Aún no registraste nada hoy. Entra al app y anota tus comidas para llevar un buen seguimiento 📊' }))
+    } else if (!hasCena) {
+      results.push(...await send({ title: '🌙 ¿Ya cenaste, Fer?', body: 'Recuerda registrar tu cena en el app para completar el diario de hoy.' }))
     }
 
-    const failures = results.filter(r => r.status === 'rejected')
+    // 2. Love message every 3rd day (days 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
+    const dayOfMonth = new Date().getUTCDate()
+    if (dayOfMonth % 3 === 1) {
+      const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
+      results.push(...await send(msg))
+    }
+
+    // Clean up expired subscriptions
+    const allResults = [...results]
+    const expired = allResults
+      .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i % subs.length]?.endpoint : null)
+      .filter(Boolean)
+    if (expired.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('endpoint', [...new Set(expired)])
+    }
+
     return res.json({
-      sent: results.filter(r => r.status === 'fulfilled').length,
-      failed: failures.length,
-      errors: failures.map(r => r.reason?.message || String(r.reason)).slice(0, 3),
+      sent: allResults.filter(r => r.status === 'fulfilled').length,
+      mealStatus: hasMeals && hasCena ? 'green' : hasMeals ? 'yellow' : 'red',
+      loveDay: dayOfMonth % 3 === 1,
+      debug,
     })
   } catch (err) {
     return res.status(500).json({ error: err.message || String(err) })

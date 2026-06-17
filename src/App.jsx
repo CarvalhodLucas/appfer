@@ -1414,6 +1414,8 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [calHistory, setCalHistory] = useState([])
   const [loadingCalHistory, setLoadingCalHistory] = useState(false)
   const [expandedDay, setExpandedDay] = useState(null)
+  const [calMonth, setCalMonth] = useState(() => new Date())
+  const [monthMeals, setMonthMeals] = useState({})
   const [frequentMeals, setFrequentMeals] = useState([])
   const [confirmMeal, setConfirmMeal] = useState(null)
   const carouselRef = useRef(null)
@@ -1444,8 +1446,15 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   useEffect(() => { loadMeals(logDate) }, [logDate])
 
   useEffect(() => {
-    if (view === 'history' && calHistory.length === 0) loadCalHistory()
+    if (view === 'history') {
+      if (calHistory.length === 0) loadCalHistory()
+      loadMonthMeals(calMonth)
+    }
   }, [view])
+
+  useEffect(() => {
+    if (view === 'history') loadMonthMeals(calMonth)
+  }, [calMonth])
 
   const loadMeals = async (date) => {
     const { data } = await supabase.from('refeicoes').select('*').eq('date', date || logDate).order('created_at')
@@ -1489,6 +1498,21 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
       setCalHistory(Object.values(grouped).sort((a, b) => b.date.localeCompare(a.date)))
     }
     setLoadingCalHistory(false)
+  }
+
+  const loadMonthMeals = async (month) => {
+    const y = month.getFullYear()
+    const m = month.getMonth()
+    const from = new Date(y, m, 1).toISOString().split('T')[0]
+    const to = new Date(y, m + 1, 0).toISOString().split('T')[0]
+    const { data } = await supabase.from('refeicoes').select('date, meal_type').gte('date', from).lte('date', to)
+    const map = {}
+    data?.forEach(row => {
+      if (!map[row.date]) map[row.date] = { hasMeals: false, hasCena: false }
+      map[row.date].hasMeals = true
+      if (row.meal_type === 'cena') map[row.date].hasCena = true
+    })
+    setMonthMeals(map)
   }
 
   const calculateMeal = async () => {
@@ -1623,6 +1647,62 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
 
       {view === 'history' ? (
         <>
+          {/* Monthly calendar */}
+          {(() => {
+            const now = new Date()
+            const y = calMonth.getFullYear()
+            const m = calMonth.getMonth()
+            const daysInMonth = new Date(y, m + 1, 0).getDate()
+            const firstDay = new Date(y, m, 1).getDay()
+            const startOffset = firstDay === 0 ? 6 : firstDay - 1
+            const cells = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+            const monthName = new Date(y, m, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+            const isCurrentMonth = y === now.getFullYear() && m === now.getMonth()
+            const DAY_NAMES = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+            const arrowStyle = { background: 'rgba(232,115,90,0.08)', border: '1.5px solid rgba(232,115,90,0.2)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--coral)', fontSize: '1.1rem', lineHeight: 1, padding: 0, fontFamily: 'var(--font-body)', flexShrink: 0 }
+            return (
+              <div className="card card-sm">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <button style={arrowStyle} onClick={() => setCalMonth(new Date(y, m - 1, 1))}>‹</button>
+                  <p style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', textTransform: 'capitalize' }}>{monthName}</p>
+                  <button style={{ ...arrowStyle, opacity: isCurrentMonth ? 0.3 : 1, cursor: isCurrentMonth ? 'default' : 'pointer' }} onClick={() => { if (!isCurrentMonth) setCalMonth(new Date(y, m + 1, 1)) }}>›</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '6px' }}>
+                  {DAY_NAMES.map(d => <p key={d} style={{ textAlign: 'center', fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', padding: '2px 0' }}>{d}</p>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                  {cells.map((day, i) => {
+                    if (!day) return <div key={i} />
+                    const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                    const isFuture = dateStr > today
+                    const isToday = dateStr === today
+                    const d = monthMeals[dateStr]
+                    let bg = 'rgba(0,0,0,0.04)'
+                    let textColor = '#ccc'
+                    if (!isFuture) {
+                      if (!d?.hasMeals) { bg = '#fee2e2'; textColor = '#dc2626' }
+                      else if (!d?.hasCena) { bg = '#fef9c3'; textColor = '#ca8a04' }
+                      else { bg = '#dcfce7'; textColor = '#16a34a' }
+                    }
+                    return (
+                      <div key={i} style={{ aspectRatio: '1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, outline: isToday ? '2px solid var(--coral)' : 'none', outlineOffset: '1px' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: isToday ? 700 : 500, color: isToday && isFuture ? 'var(--coral)' : textColor, lineHeight: 1 }}>{day}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: '14px', marginTop: '12px', justifyContent: 'center' }}>
+                  {[{ bg: '#dcfce7', text: 'Completo', color: '#16a34a' }, { bg: '#fef9c3', text: 'Sin cena', color: '#ca8a04' }, { bg: '#fee2e2', text: 'Sin registrar', color: '#dc2626' }].map(({ bg, text, color }) => (
+                    <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: bg, border: `1px solid ${color}22` }} />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
           {loadingCalHistory ? (
             <div style={{ textAlign: 'center', padding: '40px 0' }}><div className="spinner" /><p className="text-muted" style={{ marginTop: '12px' }}>Cargando historial...</p></div>
           ) : calHistory.length === 0 ? (
