@@ -1539,18 +1539,19 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
         date: logDate,
         meal_type: mealType,
         description: calculated.descripcion || mealDesc,
-        calories: calculated.calorias,
-        protein_g: calculated.proteina_g,
-        carbs_g: calculated.carbs_g,
-        fat_g: calculated.grasa_g,
+        calories: Math.round(Number(calculated.calorias) || 0),
+        protein_g: Math.round(Number(calculated.proteina_g) || 0),
+        carbs_g: Math.round(Number(calculated.carbs_g) || 0),
+        fat_g: Math.round(Number(calculated.grasa_g) || 0),
       })
       if (error) throw error
       setMealDesc('')
       setCalculated(null)
       addToast('success', '¡Comida guardada! 🥗')
       loadMeals()
+      loadMonthMeals(calMonth)
     } catch (e) {
-      addToast('error', 'Error al guardar la comida')
+      addToast('error', `Error al guardar: ${e.message}`)
     }
     setSaving(false)
   }
@@ -2354,6 +2355,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     setMessages(m => [...m, userMsg])
     setInput('')
     setLoading(true)
+    supabase.from('mensagens_agente').insert([{ role: 'user', content: text }])
 
     try {
       const today = new Date().toISOString().split('T')[0]
@@ -2389,7 +2391,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
         setMessages(m => [...m, askMsg])
         setPendingWorkoutText(text)
         setPendingWorkoutAfterHumor(true)
-        await supabase.from('mensagens_agente').insert([{ role: 'user', content: text }, { role: 'assistant', content: askMsg.content }])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: askMsg.content }])
         setLoading(false)
         return
       }
@@ -2469,10 +2471,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
       setMessages(m => [...m, assistantMsg])
       if (actionData) setPendingAction(actionData)
 
-      await supabase.from('mensagens_agente').insert([
-        { role: 'user', content: text },
-        { role: 'assistant', content: cleanReply },
-      ])
+      await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: cleanReply }])
     } catch (e) {
       const errMsg = { id: Date.now() + 1, role: 'assistant', content: `⚠️ ${e.message || 'Error al conectar con la IA. Inténtalo de nuevo.'}` }
       setMessages(m => [...m, errMsg])
@@ -2587,6 +2586,33 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     setListening(true)
   }
 
+  const renderMd = (text) => {
+    if (!text) return null
+    const inline = (str, key) => {
+      const parts = str.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)
+      return <span key={key}>{parts.map((p, i) => {
+        if (p.startsWith('**') && p.endsWith('**')) return <strong key={i}>{p.slice(2, -2)}</strong>
+        if (p.startsWith('*') && p.endsWith('*')) return <em key={i}>{p.slice(1, -1)}</em>
+        return p
+      })}</span>
+    }
+    const lines = text.split('\n')
+    const out = []
+    let listItems = []
+    const flushList = (k) => {
+      if (listItems.length) { out.push(<ul key={`ul${k}`} style={{ margin: '4px 0 4px 16px', padding: 0 }}>{listItems}</ul>); listItems = [] }
+    }
+    lines.forEach((line, i) => {
+      const bullet = line.match(/^[-*•]\s+(.+)/)
+      const numbered = line.match(/^\d+\.\s+(.+)/)
+      if (bullet) { listItems.push(<li key={i} style={{ margin: '2px 0' }}>{inline(bullet[1], i)}</li>) }
+      else if (numbered) { listItems.push(<li key={i} style={{ margin: '2px 0' }}>{inline(numbered[1], i)}</li>) }
+      else { flushList(i); out.push(line.trim() ? <p key={i} style={{ margin: '2px 0' }}>{inline(line, i)}</p> : <br key={i} />) }
+    })
+    flushList('end')
+    return out
+  }
+
   if (initialLoad) return (
     <div className="loading-wrap">
       <div className="spinner" />
@@ -2605,7 +2631,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
                 <div className="chat-avatar">🌸</div>
               )}
               <div className={`chat-bubble bubble-${msg.role}`} id={`msg-${i}`}>
-                {msg.content}
+                {msg.role === 'assistant' ? renderMd(msg.content) : msg.content}
               </div>
             </div>
           ))}
@@ -3089,16 +3115,35 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         <div className="card card-sm">
           <div className="section-title"><Icon name="bell" />Notificaciones diarias</div>
           <p className="text-muted" style={{ fontSize: '0.82rem', marginTop: '8px', marginBottom: '14px' }}>
-            Recibe un mensaje motivacional todos los días a las 10h de la mañana de Coach Fit 🌸
+            Recordatorio de comidas diario + mensajes de amor cada 3 días 🌸
           </p>
           {notifStatus === 'granted' ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>Activadas</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={enableNotifications} disabled={notifLoading} title="Renovar suscripción si dejaron de llegar">
+                    {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell" size={14} />Renovar</>}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
+                    <Icon name="bell-off" size={14} />Desactivar
+                  </button>
+                </div>
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={disableNotifications} disabled={notifLoading}>
-                {notifLoading ? <div className="spinner spinner-sm" /> : <><Icon name="bell-off" size={14} />Desactivar</>}
+              <button className="btn btn-ghost btn-sm w-full" disabled={notifLoading} onClick={async () => {
+                setNotifLoading(true)
+                try {
+                  const r = await fetch('/api/love')
+                  const d = await r.json()
+                  if (r.ok) addToast('success', `Test OK — enviado: ${d.sent ?? 0}, meal: ${d.mealStatus ?? '?'}, love: ${d.loveDay ? 'sí' : 'no'}`)
+                  else addToast('error', `Error: ${d.error || r.status}`)
+                } catch (e) { addToast('error', `Error: ${e.message}`) }
+                setNotifLoading(false)
+              }}>
+                <Icon name="bell" size={14} />Probar ahora
               </button>
             </div>
           ) : notifStatus === 'denied' ? (
@@ -3109,7 +3154,7 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
             <button className="btn btn-primary w-full" onClick={enableNotifications} disabled={notifLoading}>
               {notifLoading
                 ? <><div className="spinner spinner-sm" />Activando...</>
-                : <><Icon name="bell" size={16} />Activar notificaciones diarias</>
+                : <><Icon name="bell" size={16} />Activar notificaciones</>
               }
             </button>
           )}
