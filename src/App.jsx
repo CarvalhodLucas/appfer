@@ -3133,38 +3133,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
                   </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled={notifLoading} onClick={async () => {
-                  setNotifLoading(true)
-                  try {
-                    const r = await fetch('/api/love?test=1')
-                    const d = await r.json()
-                    if (r.ok) {
-                      if (d.sent > 0) addToast('success', `¡Notificación enviada! (${d.subs} suscripción${d.subs !== 1 ? 'es' : ''})`)
-                      else if (d.subs === 0) addToast('error', 'Sin suscripciones — haz clic en Renovar')
-                      else addToast('error', `Push falló (${d.sent}/${d.subs})`)
-                    } else addToast('error', `Error: ${d.error || r.status}`)
-                  } catch (e) { addToast('error', `Error: ${e.message}`) }
-                  setNotifLoading(false)
-                }}>
-                  <Icon name="bell" size={14} />Probar
-                </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} disabled={notifLoading} onClick={async () => {
-                  setNotifLoading(true)
-                  try {
-                    const r = await fetch('/api/love?love=1')
-                    const d = await r.json()
-                    if (r.ok) {
-                      if (d.sent > 0) addToast('success', '💕 ¡Mensaje de amor enviado!')
-                      else if (d.subs === 0) addToast('error', 'Sin suscripciones — haz clic en Renovar')
-                      else addToast('error', `Push falló (${d.sent}/${d.subs})`)
-                    } else addToast('error', `Error: ${d.error || r.status}`)
-                  } catch (e) { addToast('error', `Error: ${e.message}`) }
-                  setNotifLoading(false)
-                }}>
-                  💕 Amor
-                </button>
-              </div>
             </div>
           ) : notifStatus === 'denied' ? (
             <div style={{ background: 'rgba(232,115,90,0.07)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
