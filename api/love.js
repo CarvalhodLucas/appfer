@@ -88,12 +88,20 @@ export default async function handler(req, res) {
     )
 
     const isTest = req.query?.test === '1' || req.query?.test === 'true'
+    const forceLove = req.query?.love === '1' || req.query?.love === 'true'
     const results = []
 
-    // Test mode: send one notification immediately to confirm the push pipeline works
+    // Test mode: confirm push pipeline works
     if (isTest) {
       results.push(...await send({ title: '🔔 Teste de notificação', body: 'Se você recebeu isso, as notificações estão funcionando! 🎉' }))
       return res.json({ sent: results.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, debug })
+    }
+
+    // Force love mode: send a love message now regardless of the 3-day interval
+    if (forceLove) {
+      const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
+      results.push(...await send(msg))
+      return res.json({ sent: results.filter(r => r.status === 'fulfilled').length, love: true, subs: subs.length, debug })
     }
 
     // 1. Check YESTERDAY's meals → send reminder if yellow or red
