@@ -3114,9 +3114,6 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
       {notifStatus !== 'unsupported' && (
         <div className="card card-sm">
           <div className="section-title"><Icon name="bell" />Notificaciones diarias</div>
-          <p className="text-muted" style={{ fontSize: '0.82rem', marginTop: '8px', marginBottom: '14px' }}>
-            Recordatorio de comidas diario + mensajes de amor cada 3 días 🌸
-          </p>
           {notifStatus === 'granted' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
