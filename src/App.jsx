@@ -3136,10 +3136,13 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
               <button className="btn btn-ghost btn-sm w-full" disabled={notifLoading} onClick={async () => {
                 setNotifLoading(true)
                 try {
-                  const r = await fetch('/api/love')
+                  const r = await fetch('/api/love?test=1')
                   const d = await r.json()
-                  if (r.ok) addToast('success', `Test OK — enviado: ${d.sent ?? 0}, meal: ${d.mealStatus ?? '?'}, love: ${d.loveDay ? 'sí' : 'no'}`)
-                  else addToast('error', `Error: ${d.error || r.status}`)
+                  if (r.ok) {
+                    if (d.sent > 0) addToast('success', `¡Notificación enviada! (${d.subs} suscripción${d.subs !== 1 ? 'es' : ''})`)
+                    else if (d.subs === 0) addToast('error', 'Sin suscripciones en la base de datos — haz clic en Renovar')
+                    else addToast('error', `Enviado: ${d.sent} de ${d.subs} — el push falló`)
+                  } else addToast('error', `Error: ${d.error || r.status}`)
                 } catch (e) { addToast('error', `Error: ${e.message}`) }
                 setNotifLoading(false)
               }}>
