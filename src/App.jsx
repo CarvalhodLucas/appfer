@@ -231,17 +231,13 @@ REGLAS DE COMPORTAMIENTO:
 6. Adapta el vocabulario al nivel principiante — sin términos técnicos complejos
 7. Sé breve y directa, no más de 3-4 frases en respuestas del chat
 8. Celebra cada pequeño logro con entusiasmo genuino
+14. RESPONDE SOLO LO QUE TE PREGUNTAN. No sugieras espontáneamente entrenamientos, ejercicios ni cambios que Fernanda no haya pedido. Si dice "perfecto", "gracias", "ok" u otras confirmaciones breves, responde solo con un mensaje corto de cierre. No añadas propuestas adicionales.
+15. NUNCA devuelvas JSON en el chat. Responde siempre en texto natural. Los JSON internos del sistema se gestionan automáticamente y Fernanda nunca debe verlos.
 9. Si tiene lesiones o limitaciones físicas → NUNCA incluyas ejercicios que las agraven; sugiere siempre alternativas seguras
 10. Usa la altura, el peso y la edad para dar recomendaciones calóricas y de progresión más precisas
 11. TEMA ESTRICTO: Solo respondes preguntas sobre entrenamiento, ejercicio, alimentación, nutrición, hábitos saludables, descanso o bienestar físico. Si Fernanda pregunta sobre cualquier otro tema, respóndele con cariño que solo puedes ayudarle con su entrenamiento y alimentación, y redirige la conversación a esos temas.
 12. SUEÑO: Si durmió menos de 6h → propón entrenamiento más ligero y recupérate bien; 6-7h → ajusta intensidad a normal; 8h+ → puede hacer intensidad completa.
 13. ESTRÉS: Si estrés es Alto → prioriza ejercicios de bajo impacto, yoga o estiramientos, y usa tono muy cálido; si es Medio → intensidad normal; si es Bajo → puede ir a tope.
-
-CUANDO ESTIMES CALORÍAS, devuelve SOLO este JSON:
-{"descripcion":"Resumen","calorias":450,"proteina_g":35,"carbs_g":40,"grasa_g":12}
-
-CUANDO SUGIRIERAS PLATOS, devuelve SOLO este JSON:
-{"sugerencias":[{"nombre":"Nombre","descripcion":"Descripción","calorias_aprox":350,"tiempo_prep":"20 min"}]}
 
 ACCIONES — añade EXACTAMENTE al FINAL de tu respuesta (solo una acción por respuesta):
 
@@ -2383,7 +2379,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
 
       // Detect intent
       const isWorkoutReq = /treino|entrenamiento|ejercicio|exerc[ií]cio|entrena|workout|muscula|musculac|braço|braco|perna|abdomen|cardio|hombro|espalda|pecho|pierna/i.test(text)
-      const isMealLog = /com[ií]|almuerzo|desayuno|cena|snack|calorias|cal[oó]ria|comi|bebi|tomei|eat|comí|bev/i.test(text)
+      const isMealLog = /\b(com[ií]|almorcé|desayuné|cené|meren[dg]|snack[eé]|bebi|bebí|tomei|me\s+com[ií]|me\s+tomé|acabo\s+de\s+comer|acab[oó]\s+de\s+comer)\b/i.test(text)
 
       // If workout requested and no humor check-in yet today → ask first
       if (isWorkoutReq && !hd?.level) {
@@ -2438,20 +2434,19 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
         cleanReply = reply.replace(/\s*\[ACCIÓN:\{[\s\S]*\}\]\s*/, ' ').trim()
       }
 
-      // Fallback 1: raw JSON object in the reply text
-      if (!actionData) {
-        const first = cleanReply.indexOf('{')
-        const last = cleanReply.lastIndexOf('}')
-        if (first !== -1 && last > first) {
-          try {
-            const parsed = JSON.parse(cleanReply.slice(first, last + 1))
-            if (parsed.titulo && Array.isArray(parsed.ejercicios)) {
-              actionData = { type: 'generate_workout', workout: parsed, description: parsed.titulo }
-              cleanReply = cleanReply.slice(0, first).trim() || `¡He preparado tu entrenamiento "${parsed.titulo}"! 💪🌸`
-            }
-          } catch {}
-        }
-      }
+      // Strip any JSON blobs leaked into the chat reply
+      cleanReply = cleanReply.replace(/\{[\s\S]*?\}/g, (match) => {
+        try {
+          const p = JSON.parse(match)
+          if (p.titulo && Array.isArray(p.ejercicios)) {
+            if (!actionData) actionData = { type: 'generate_workout', workout: p, description: p.titulo }
+            return ''
+          }
+          // Strip calorie/meal/suggestion JSONs — should never appear as text
+          if (p.calorias !== undefined || p.calories !== undefined || p.descripcion !== undefined || p.sugerencias !== undefined) return ''
+        } catch {}
+        return match
+      }).replace(/\s{2,}/g, ' ').trim()
 
       // Fallback 2: use parallel structured call results
       if (!actionData && isWorkoutReq) {
