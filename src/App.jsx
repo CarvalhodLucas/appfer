@@ -1518,8 +1518,8 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setCalculating(true)
     setSuggestions(null)
     try {
-      const sp = buildSystemPrompt(localProfile, { humor: null, calorias: 0, comidas: [], ultimoTreino: null, diasSemana: 0 })
-      const result = await callClaude(claudeKey, sp, `Estima las calorías y macros de: "${mealDesc}". Devuelve SOLO el JSON.`, true)
+      const sp = 'Eres un asistente de nutrición. Responde ÚNICAMENTE con JSON, sin texto adicional ni bloques de código. Formato exacto: {"descripcion":"resumen breve","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}'
+      const result = await callClaude(claudeKey, sp, `Estima las calorías y macros de: "${mealDesc}"`, true)
       setCalculated(result)
     } catch (e) {
       addToast('error', `Error al calcular: ${e.message}`)
@@ -1589,9 +1589,9 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setSuggestions(null)
     try {
       const totalCals = todayMeals.reduce((s, m) => s + (m.calories || 0), 0)
-      const sp = buildSystemPrompt(localProfile, { humor: null, calorias: totalCals, comidas: todayMeals, ultimoTreino: null, diasSemana: 0 })
+      const sp = `Eres un asistente de nutrición. Responde ÚNICAMENTE con JSON, sin texto adicional. Formato exacto: {"sugerencias":[{"nombre":"...","descripcion":"...","calorias_aprox":N,"tiempo_prep":"..."}]}. Alimentos que NO le gustan: ${(localProfile?.food_dislikes || []).join(', ') || 'ninguno'}.`
       const result = await callClaude(claudeKey, sp,
-        `Fernanda quiere saber qué comer ahora. Ya lleva ${totalCals} kcal hoy de ${localProfile?.daily_calories || 1500} kcal meta. Sugiere 3 platos fáciles que pueda preparar en casa. Devuelve SOLO el JSON de sugerencias.`,
+        `Fernanda quiere saber qué comer ahora. Ya lleva ${totalCals} kcal hoy de ${localProfile?.daily_calories || 1500} kcal meta. Sugiere 3 platos fáciles que pueda preparar en casa.`,
         true
       )
       setSuggestions(result.sugerencias || [])
