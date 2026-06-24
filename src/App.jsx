@@ -2761,6 +2761,10 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         return
       }
       const vapidKey = 'BAbFQJr_FQlcEfiNjUTP5ssmO6FXaXyOKtK8Tzn-eg74dEVanby6YFk0P2ULoY7C1C5vR3N4yFEhLjPv0RxP6Ds'
+      // Ensure SW is registered (may have been cleared by user)
+      if (!navigator.serviceWorker.controller) {
+        await navigator.serviceWorker.register('/sw.js')
+      }
       const reg = await navigator.serviceWorker.ready
       // Unsubscribe any existing subscription (may use old VAPID key)
       const existing = await reg.pushManager.getSubscription()
