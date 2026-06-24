@@ -91,17 +91,29 @@ export default async function handler(req, res) {
     const forceLove = req.query?.love === '1' || req.query?.love === 'true'
     const results = []
 
-    // Test mode: confirm push pipeline works
+    const cleanup = async (res) => {
+      const expired = res
+        .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i]?.endpoint : null)
+        .filter(Boolean)
+      if (expired.length > 0) {
+        await supabase.from('push_subscriptions').delete().in('endpoint', [...new Set(expired)])
+      }
+      return expired.length
+    }
+
+    // Test mode: confirm push pipeline works + clean expired subscriptions
     if (isTest) {
-      results.push(...await send({ title: '🔔 Teste de notificação', body: 'Se você recebeu isso, as notificações estão funcionando! 🎉' }))
-      return res.json({ sent: results.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, debug })
+      const testResults = await send({ title: '🔔 Teste de notificação', body: 'Se você recebeu isso, as notificações estão funcionando! 🎉' })
+      const cleaned = await cleanup(testResults)
+      return res.json({ sent: testResults.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, cleaned, debug })
     }
 
     // Force love mode: send a love message now regardless of the 3-day interval
     if (forceLove) {
       const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
-      results.push(...await send(msg))
-      return res.json({ sent: results.filter(r => r.status === 'fulfilled').length, love: true, subs: subs.length, debug })
+      const loveResults = await send(msg)
+      await cleanup(loveResults)
+      return res.json({ sent: loveResults.filter(r => r.status === 'fulfilled').length, love: true, subs: subs.length, debug })
     }
 
     // 1. Check YESTERDAY's meals → send reminder if yellow or red
@@ -132,13 +144,7 @@ export default async function handler(req, res) {
       results.push(...await send(msg))
     }
 
-    // Clean up expired subscriptions
-    const expired = results
-      .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i % subs.length]?.endpoint : null)
-      .filter(Boolean)
-    if (expired.length > 0) {
-      await supabase.from('push_subscriptions').delete().in('endpoint', [...new Set(expired)])
-    }
+    await cleanup(results)
 
     return res.json({
       sent: results.filter(r => r.status === 'fulfilled').length,
