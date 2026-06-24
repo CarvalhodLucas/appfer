@@ -32,6 +32,7 @@ const Icon = ({ name, size = 22, ...props }) => {
     microphone: <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75M8.25 21h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />,
     bell: <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />,
     'bell-off': <path strokeLinecap="round" strokeLinejoin="round" d="M9.143 17.082a24.248 24.248 0 0 0 3.844.148m-3.844-.148a23.856 23.856 0 0 1-5.455-1.31 8.964 8.964 0 0 0 2.3-5.542m3.155 6.852a3 3 0 0 0 5.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 0 0 .126-1.785 8.942 8.942 0 0 0-.59-3.165M6.53 6.53A5.97 5.97 0 0 0 6 9v.75a8.964 8.964 0 0 1-2.169 5.837L21 21M6.53 6.53 3 3" />,
+    camera: <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316ZM16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />,
   }
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
@@ -1415,6 +1416,8 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [frequentMeals, setFrequentMeals] = useState([])
   const [confirmMeal, setConfirmMeal] = useState(null)
+  const [analysingPhoto, setAnalysingPhoto] = useState(false)
+  const photoInputRef = useRef(null)
   const carouselRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1525,6 +1528,53 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
       addToast('error', `Error al calcular: ${e.message}`)
     }
     setCalculating(false)
+  }
+
+  const analysePhoto = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAnalysingPhoto(true)
+    setCalculated(null)
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${claudeKey}`,
+          'HTTP-Referer': 'https://fitfernanda.app',
+          'X-Title': 'FitFernanda App',
+        },
+        body: JSON.stringify({
+          model: 'anthropic/claude-3-haiku',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${file.type || 'image/jpeg'};base64,${b64}` } },
+              { type: 'text', text: 'Lê a tabela nutricional desta foto. Extrai os valores POR PORÇÃO. Responde APENAS com JSON válido, sem texto adicional: {"descripcion":"nome do produto","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}' }
+            ]
+          }]
+        })
+      })
+      if (!response.ok) throw new Error(`Error ${response.status}`)
+      const data = await response.json()
+      const text = data.choices?.[0]?.message?.content?.trim() || ''
+      const match = text.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('Não foi possível ler a tabela')
+      const result = JSON.parse(match[0])
+      setCalculated(result)
+      if (result.descripcion) setMealDesc(result.descripcion)
+      addToast('success', '📷 Tabela nutricional lida!')
+    } catch (err) {
+      addToast('error', `Erro ao ler a foto: ${err.message}`)
+    }
+    setAnalysingPhoto(false)
+    if (photoInputRef.current) photoInputRef.current.value = ''
   }
 
   const saveMeal = async () => {
@@ -1906,12 +1956,35 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
             <div className="input-group mt-12" style={{ position: 'relative' }}>
               <textarea
                 className="input"
-                placeholder={mealListening ? '🎙️ Escuchando...' : 'Ej: 200g de arroz con pollo, 1 plato de ensalada verde, 1 vaso de jugo...'}
+                placeholder={mealListening ? '🎙️ Escuchando...' : analysingPhoto ? '📷 Lendo a tabela nutricional...' : 'Ej: 200g de arroz con pollo, 1 plato de ensalada verde, 1 vaso de jugo...'}
                 value={mealDesc}
                 onChange={e => setMealDesc(e.target.value)}
                 rows={3}
-                style={{ paddingRight: '52px' }}
+                style={{ paddingRight: '92px' }}
               />
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={analysePhoto}
+              />
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={analysingPhoto}
+                style={{
+                  position: 'absolute', top: '10px', right: '52px',
+                  width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  background: analysingPhoto ? 'var(--coral)' : 'var(--border-light)',
+                  color: analysingPhoto ? '#fff' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.2s',
+                }}
+                title="Fotografar tabela nutricional"
+              >
+                {analysingPhoto ? <div className="spinner spinner-sm" /> : <Icon name="camera" size={16} />}
+              </button>
               <button
                 onClick={toggleMealListening}
                 style={{
