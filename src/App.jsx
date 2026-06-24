@@ -1536,13 +1536,13 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setAnalysingPhoto(true)
     setCalculated(null)
     try {
-      // Compress to max 1024px before sending (mobile photos can be 5-10MB)
+      // Compress to max 1600px — nutritional labels have small text, needs higher res
       const b64 = await new Promise((resolve) => {
         const img = new Image()
         const url = URL.createObjectURL(file)
         img.onload = () => {
           URL.revokeObjectURL(url)
-          const MAX = 1024
+          const MAX = 1600
           let { width, height } = img
           if (width > MAX || height > MAX) {
             const r = Math.min(MAX / width, MAX / height)
@@ -1552,7 +1552,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
           const canvas = document.createElement('canvas')
           canvas.width = width; canvas.height = height
           canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-          resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1])
+          resolve(canvas.toDataURL('image/jpeg', 0.92).split(',')[1])
         }
         img.src = url
       })
@@ -1570,7 +1570,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
-              { type: 'text', text: 'Esta é uma tabela nutricional. Lê os valores da coluna "Por Porção" (não por 100g, não %VD). Procura por: Valor Energético em kcal, Proteínas em g, Carboidratos em g, Gorduras Totais em g. Responde APENAS com JSON puro sem markdown: {"descripcion":"nome do alimento","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}' }
+              { type: 'text', text: 'Esta é uma foto de uma tabela nutricional. Faça duas coisas: 1) Lê o nome do PRODUTO ou MARCA escrito no rótulo (ex: "Ketchup Heinz", não diga "tomate"). 2) Copia os números EXATOS da coluna "Por Porção" (ignore a coluna por 100g e ignore %VD): Valor Energético em kcal, Carboidratos em g, Proteínas em g, Gorduras Totais em g. NÃO estime nem arredonde — transcreve os números exatamente como estão impressos. Responde APENAS com JSON puro sem markdown nem explicação: {"descripcion":"nome do produto","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}' }
             ]
           }]
         })
