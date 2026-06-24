@@ -46,9 +46,9 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const vapidPublic = process.env.VITE_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || process.env['VITE_VAPID_CHAVE_PÚBLICA']
-    const vapidPrivate = process.env.VAPID_PRIVATE_KEY
-    const vapidEmail = process.env.VAPID_EMAIL
+    const vapidPublic = 'BD6PoUYpX7FVB5VzShVJfuxrMs_OtZE-IbLyeL6G1_e0U31Ltybzu1Wvxi0k5vk-8fAnuF7MGbjZc7NOMNRZPxE'
+    const vapidPrivate = 'oOUcT3yR-RMjDfKzsnOC5u2Kh6MyI06jABdSmoN17HM'
+    const vapidEmail = process.env.VAPID_EMAIL || 'carvalhodlucas@gmail.com'
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 

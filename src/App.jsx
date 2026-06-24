@@ -2760,7 +2760,7 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         setNotifLoading(false)
         return
       }
-      const vapidKey = 'BAbFQJr_FQlcEfiNjUTP5ssmO6FXaXyOKtK8Tzn-eg74dEVanby6YFk0P2ULoY7C1C5vR3N4yFEhLjPv0RxP6Ds'
+      const vapidKey = 'BD6PoUYpX7FVB5VzShVJfuxrMs_OtZE-IbLyeL6G1_e0U31Ltybzu1Wvxi0k5vk-8fAnuF7MGbjZc7NOMNRZPxE'
       // Always (re-)register SW — idempotent; skipWaiting+claim in sw.js makes it active immediately
       await navigator.serviceWorker.register('/sw.js')
       // Wait until SW is active AND controlling this page (required on iOS)
@@ -2792,7 +2792,11 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
       }
       addToast('success', 'Notificação ativada! 🔔')
     } catch (e) {
-      addToast('error', `Error: ${e.message}`)
+      if (e.message?.includes('no active Service Worker')) {
+        addToast('error', 'Recarrega a página e tenta de novo (SW não ativo)')
+      } else {
+        addToast('error', `Error: ${e.message}`)
+      }
     }
     setNotifLoading(false)
   }
