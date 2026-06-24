@@ -47,7 +47,7 @@ export default async function handler(req, res) {
 
     const vapidPublic = 'BD6PoUYpX7FVB5VzShVJfuxrMs_OtZE-IbLyeL6G1_e0U31Ltybzu1Wvxi0k5vk-8fAnuF7MGbjZc7NOMNRZPxE'
     const vapidPrivate = 'oOUcT3yR-RMjDfKzsnOC5u2Kh6MyI06jABdSmoN17HM'
-    const vapidEmail = process.env.VAPID_EMAIL || 'carvalhodlucas@gmail.com'
+    const vapidEmail = 'https://appfer.vercel.app'
 
     if (!vapidPublic || !vapidPrivate || !vapidEmail) {
       return res.status(500).json({
