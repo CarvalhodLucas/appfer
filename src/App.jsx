@@ -2761,8 +2761,15 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         return
       }
       const vapidKey = 'BAbFQJr_FQlcEfiNjUTP5ssmO6FXaXyOKtK8Tzn-eg74dEVanby6YFk0P2ULoY7C1C5vR3N4yFEhLjPv0RxP6Ds'
-      // Always (re-)register SW — idempotent, required on iOS after data clear
+      // Always (re-)register SW — idempotent; skipWaiting+claim in sw.js makes it active immediately
       await navigator.serviceWorker.register('/sw.js')
+      // Wait until SW is active AND controlling this page (required on iOS)
+      if (!navigator.serviceWorker.controller) {
+        await new Promise(resolve => {
+          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })
+          setTimeout(resolve, 3000)
+        })
+      }
       const reg = await navigator.serviceWorker.ready
       // Unsubscribe any existing subscription (may use old VAPID key)
       const existing = await reg.pushManager.getSubscription()
