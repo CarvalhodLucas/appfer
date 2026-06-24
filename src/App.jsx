@@ -1536,11 +1536,25 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setAnalysingPhoto(true)
     setCalculated(null)
     try {
-      const b64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
+      // Compress to max 1024px before sending (mobile photos can be 5-10MB)
+      const b64 = await new Promise((resolve) => {
+        const img = new Image()
+        const url = URL.createObjectURL(file)
+        img.onload = () => {
+          URL.revokeObjectURL(url)
+          const MAX = 1024
+          let { width, height } = img
+          if (width > MAX || height > MAX) {
+            const r = Math.min(MAX / width, MAX / height)
+            width = Math.round(width * r)
+            height = Math.round(height * r)
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = width; canvas.height = height
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1])
+        }
+        img.src = url
       })
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -1551,22 +1565,26 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
           'X-Title': 'FitFernanda App',
         },
         body: JSON.stringify({
-          model: 'anthropic/claude-3-haiku',
+          model: 'google/gemini-2.0-flash-exp:free',
           messages: [{
             role: 'user',
             content: [
-              { type: 'image_url', image_url: { url: `data:${file.type || 'image/jpeg'};base64,${b64}` } },
-              { type: 'text', text: 'Lê a tabela nutricional desta foto. Extrai os valores POR PORÇÃO. Responde APENAS com JSON válido, sem texto adicional: {"descripcion":"nome do produto","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}' }
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+              { type: 'text', text: 'Esta é uma tabela nutricional. Lê os valores da coluna "Por Porção" (não por 100g, não %VD). Procura por: Valor Energético em kcal, Proteínas em g, Carboidratos em g, Gorduras Totais em g. Responde APENAS com JSON puro sem markdown: {"descripcion":"nome do alimento","calorias":N,"proteina_g":N,"carbs_g":N,"grasa_g":N}' }
             ]
           }]
         })
       })
-      if (!response.ok) throw new Error(`Error ${response.status}`)
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error?.message || `Erro ${response.status}`)
+      }
       const data = await response.json()
       const text = data.choices?.[0]?.message?.content?.trim() || ''
-      const match = text.match(/\{[\s\S]*\}/)
-      if (!match) throw new Error('Não foi possível ler a tabela')
+      const match = text.match(/\{[\s\S]*?\}/)
+      if (!match) throw new Error(`Resposta inválida: ${text.slice(0, 80)}`)
       const result = JSON.parse(match[0])
+      if (!result.calorias && result.calorias !== 0) throw new Error('Não encontrei os valores na tabela')
       setCalculated(result)
       if (result.descripcion) setMealDesc(result.descripcion)
       addToast('success', '📷 Tabela nutricional lida!')
