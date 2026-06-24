@@ -146,11 +146,7 @@ export default async function handler(req, res) {
           msg: r.reason?.body || r.reason?.message || String(r.reason)
         } : null)
         .filter(Boolean)
-      const subDetails = subs.map(row => {
-        const s = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
-        return { ep: row.endpoint?.slice(0, 40), hasP256dh: !!s?.keys?.p256dh, hasAuth: !!s?.keys?.auth, p256dhLen: s?.keys?.p256dh?.length }
-      })
-      return res.json({ sent: testResults.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, cleaned, errors, debug, subDetails })
+      return res.json({ sent: testResults.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, cleaned, errors, debug })
     }
 
     // Force love mode: send a love message now regardless of the 3-day interval
