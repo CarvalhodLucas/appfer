@@ -2753,22 +2753,23 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
     }
     setNotifLoading(true)
     try {
+      const vapidKey = 'BD6PoUYpX7FVB5VzShVJfuxrMs_OtZE-IbLyeL6G1_e0U31Ltybzu1Wvxi0k5vk-8fAnuF7MGbjZc7NOMNRZPxE'
+      // Register SW FIRST (required on iOS before requestPermission)
+      await navigator.serviceWorker.register('/sw.js')
+      // Wait for SW to be active and controlling the page
+      await navigator.serviceWorker.ready
+      if (!navigator.serviceWorker.controller) {
+        await new Promise(resolve => {
+          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })
+          setTimeout(resolve, 4000)
+        })
+      }
       const permission = await Notification.requestPermission()
       setNotifStatus(permission)
       if (permission !== 'granted') {
         addToast('error', 'Permiso de notificaciones denegado')
         setNotifLoading(false)
         return
-      }
-      const vapidKey = 'BD6PoUYpX7FVB5VzShVJfuxrMs_OtZE-IbLyeL6G1_e0U31Ltybzu1Wvxi0k5vk-8fAnuF7MGbjZc7NOMNRZPxE'
-      // Always (re-)register SW — idempotent; skipWaiting+claim in sw.js makes it active immediately
-      await navigator.serviceWorker.register('/sw.js')
-      // Wait until SW is active AND controlling this page (required on iOS)
-      if (!navigator.serviceWorker.controller) {
-        await new Promise(resolve => {
-          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })
-          setTimeout(resolve, 3000)
-        })
       }
       const reg = await navigator.serviceWorker.ready
       // Unsubscribe any existing subscription (may use old VAPID key)
