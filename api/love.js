@@ -93,7 +93,7 @@ export default async function handler(req, res) {
 
     const cleanup = async (res) => {
       const expired = res
-        .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404) ? subs[i]?.endpoint : null)
+        .map((r, i) => r.status === 'rejected' && (r.reason?.statusCode === 410 || r.reason?.statusCode === 404 || r.reason?.statusCode === 403) ? subs[i]?.endpoint : null)
         .filter(Boolean)
       if (expired.length > 0) {
         await supabase.from('push_subscriptions').delete().in('endpoint', [...new Set(expired)])
