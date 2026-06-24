@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
+import https from 'https'
 
 const MESSAGES = [
   { title: '¡Buenos días, Fernanda! 🌸', body: 'Hoy es un nuevo día para ser la mejor versión de ti misma. ¡Tú puedes!' },
@@ -81,10 +82,25 @@ export default async function handler(req, res) {
 
     const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
+    const sendFixed = async (sub, payload) => {
+      const details = await webpush.generateRequestDetails(sub, payload)
+      if (details.headers.Authorization) details.headers.Authorization = details.headers.Authorization.replace(', k=', ',k=')
+      return new Promise((resolve, reject) => {
+        const url = new URL(details.endpoint)
+        const req2 = https.request({ hostname: url.hostname, path: url.pathname, method: details.method, headers: details.headers }, r => {
+          let b = ''; r.on('data', d => b += d)
+          r.on('end', () => r.statusCode < 300 ? resolve(r.statusCode) : reject(Object.assign(new Error(b), { statusCode: r.statusCode, body: b })))
+        })
+        req2.on('error', reject)
+        if (details.body) req2.write(details.body)
+        req2.end()
+      })
+    }
+
     const results = await Promise.allSettled(
       subs.map(row => {
-        // Handle both JSONB (object) and TEXT (string) column types
         const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
+        if (sub.endpoint.includes('web.push.apple.com')) return sendFixed(sub, JSON.stringify(msg))
         return webpush.sendNotification(sub, JSON.stringify(msg))
       })
     )
