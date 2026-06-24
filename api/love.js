@@ -105,7 +105,14 @@ export default async function handler(req, res) {
     if (isTest) {
       const testResults = await send({ title: '🔔 Teste de notificação', body: 'Se você recebeu isso, as notificações estão funcionando! 🎉' })
       const cleaned = await cleanup(testResults)
-      return res.json({ sent: testResults.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, cleaned, debug })
+      const errors = testResults
+        .map((r, i) => r.status === 'rejected' ? {
+          endpoint: subs[i]?.endpoint?.slice(0, 60),
+          status: r.reason?.statusCode,
+          msg: r.reason?.body || r.reason?.message || String(r.reason)
+        } : null)
+        .filter(Boolean)
+      return res.json({ sent: testResults.filter(r => r.status === 'fulfilled').length, test: true, subs: subs.length, cleaned, errors, debug })
     }
 
     // Force love mode: send a love message now regardless of the 3-day interval
