@@ -1,5 +1,7 @@
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
+import https from 'https'
+import crypto from 'crypto'
 
 const MESSAGES = [
   { title: 'Tu pololo 💕', body: 'Amorzinho, quiero que sepas que eres la mejor parte de mis días. Te amo más de lo que las palabras pueden decir.' },
@@ -102,16 +104,31 @@ export default async function handler(req, res) {
       return expired.length
     }
 
+    // Manual push to Apple with no-space Authorization header (Apple strict parsing workaround)
+    const sendAppleManual = (endpoint) => new Promise((resolve, reject) => {
+      const now = Math.floor(Date.now() / 1000)
+      const origin = new URL(endpoint).origin
+      const hdr = Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })).toString('base64url')
+      const pld = Buffer.from(JSON.stringify({ aud: origin, exp: now + 43200, sub: 'https://appfer.vercel.app' })).toString('base64url')
+      const pubBuf = Buffer.from(vapidPublic, 'base64url')
+      const jwk = { kty: 'EC', crv: 'P-256', d: vapidPrivate, x: pubBuf.slice(1,33).toString('base64url'), y: pubBuf.slice(33,65).toString('base64url') }
+      const prvKey = crypto.createPrivateKey({ key: jwk, format: 'jwk' })
+      const sig = crypto.sign(null, Buffer.from(`${hdr}.${pld}`), { key: prvKey, dsaEncoding: 'ieee-p1363' })
+      const jwt = `${hdr}.${pld}.${sig.toString('base64url')}`
+      const auth = `vapid t=${jwt},k=${vapidPublic}`
+      const url = new URL(endpoint)
+      const opts = { hostname: url.hostname, path: url.pathname, method: 'POST', headers: { Authorization: auth, TTL: '60', 'Content-Length': '0' } }
+      const req2 = https.request(opts, r => { let b = ''; r.on('data', d => b += d); r.on('end', () => r.statusCode < 300 ? resolve(r.statusCode) : reject(Object.assign(new Error(b), { statusCode: r.statusCode, body: b }))) })
+      req2.on('error', reject)
+      req2.end()
+    })
+
     // Payloadless test: isolate JWT validity from payload encryption
     if (isPayloadless) {
-      const plResults = await Promise.allSettled(
-        subs.map(row => {
-          const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
-          return webpush.sendNotification(sub, null)
-        })
-      )
-      const errors = plResults.map((r, i) => r.status === 'rejected' ? { ep: subs[i]?.endpoint?.slice(0, 50), status: r.reason?.statusCode, msg: r.reason?.body || r.reason?.message } : null).filter(Boolean)
-      return res.json({ payloadless: true, sent: plResults.filter(r => r.status === 'fulfilled').length, errors, debug })
+      const appleSubs = subs.filter(r => r.endpoint.includes('web.push.apple.com'))
+      const manualResults = await Promise.allSettled(appleSubs.map(r => sendAppleManual(r.endpoint)))
+      const errors = manualResults.map((r, i) => r.status === 'rejected' ? { ep: appleSubs[i]?.endpoint?.slice(0, 50), status: r.reason?.statusCode, msg: r.reason?.body || r.reason?.message } : null).filter(Boolean)
+      return res.json({ payloadless: true, manual: true, sent: manualResults.filter(r => r.status === 'fulfilled').length, errors, debug })
     }
 
     // Test mode: confirm push pipeline works + clean expired subscriptions
