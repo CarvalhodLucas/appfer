@@ -89,6 +89,7 @@ export default async function handler(req, res) {
 
     const isTest = req.query?.test === '1' || req.query?.test === 'true'
     const forceLove = req.query?.love === '1' || req.query?.love === 'true'
+    const isPayloadless = req.query?.payloadless === '1'
     const results = []
 
     const cleanup = async (res) => {
@@ -99,6 +100,18 @@ export default async function handler(req, res) {
         await supabase.from('push_subscriptions').delete().in('endpoint', [...new Set(expired)])
       }
       return expired.length
+    }
+
+    // Payloadless test: isolate JWT validity from payload encryption
+    if (isPayloadless) {
+      const plResults = await Promise.allSettled(
+        subs.map(row => {
+          const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription
+          return webpush.sendNotification(sub, null)
+        })
+      )
+      const errors = plResults.map((r, i) => r.status === 'rejected' ? { ep: subs[i]?.endpoint?.slice(0, 50), status: r.reason?.statusCode, msg: r.reason?.body || r.reason?.message } : null).filter(Boolean)
+      return res.json({ payloadless: true, sent: plResults.filter(r => r.status === 'fulfilled').length, errors, debug })
     }
 
     // Test mode: confirm push pipeline works + clean expired subscriptions
