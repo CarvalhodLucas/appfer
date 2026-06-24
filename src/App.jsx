@@ -2760,12 +2760,7 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         setNotifLoading(false)
         return
       }
-      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
-      if (!vapidKey) {
-        addToast('error', 'Falta a variável VITE_VAPID_PUBLIC_KEY no Vercel. Renomeia VITE_VAPID_CHAVE_PÚBLICA → VITE_VAPID_PUBLIC_KEY.')
-        setNotifLoading(false)
-        return
-      }
+      const vapidKey = 'BAbFQJr_FQlcEfiNjUTP5ssmO6FXaXyOKtK8Tzn-eg74dEVanby6YFk0P2ULoY7C1C5vR3N4yFEhLjPv0RxP6Ds'
       const reg = await navigator.serviceWorker.ready
       // Unsubscribe any existing subscription (may use old VAPID key)
       const existing = await reg.pushManager.getSubscription()
