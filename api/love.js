@@ -105,16 +105,26 @@ export default async function handler(req, res) {
       return expired.length
     }
 
-    // Apple requires no space in Authorization: vapid t=...,k=... (web-push adds ", k=" with space)
+    // Apple rejects VAPID header with space (web-push sends ", k=" — Apple needs ",k=")
+    // Build JWT manually and replace the Authorization header entirely
+    const buildJwt = (audience) => {
+      const now = Math.floor(Date.now() / 1000)
+      const h = Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })).toString('base64url')
+      const p = Buffer.from(JSON.stringify({ aud: audience, exp: now + 43200, sub: 'https://appfer.vercel.app' })).toString('base64url')
+      const pubBuf = Buffer.from(vapidPublic, 'base64url')
+      const jwk = { kty: 'EC', crv: 'P-256', d: vapidPrivate, x: pubBuf.slice(1,33).toString('base64url'), y: pubBuf.slice(33,65).toString('base64url') }
+      const prvKey = crypto.createPrivateKey({ key: jwk, format: 'jwk' })
+      const sig = crypto.sign(null, Buffer.from(`${h}.${p}`), { key: prvKey, dsaEncoding: 'ieee-p1363' })
+      return `${h}.${p}.${sig.toString('base64url')}`
+    }
     const sendFixed = async (sub, payload) => {
       const details = await webpush.generateRequestDetails(sub, payload)
-      if (details.headers.Authorization) {
-        details.headers.Authorization = details.headers.Authorization.replace(', k=', ',k=')
-      }
+      // Replace Authorization entirely with our correctly-formatted JWT
+      const origin = new URL(sub.endpoint).origin
+      details.headers.Authorization = `vapid t=${buildJwt(origin)},k=${vapidPublic}`
       return new Promise((resolve, reject) => {
         const url = new URL(details.endpoint)
-        const opts = { hostname: url.hostname, path: url.pathname, method: details.method, headers: details.headers }
-        const req2 = https.request(opts, r => {
+        const req2 = https.request({ hostname: url.hostname, path: url.pathname, method: details.method, headers: details.headers }, r => {
           let b = ''; r.on('data', d => b += d)
           r.on('end', () => r.statusCode < 300 ? resolve(r.statusCode) : reject(Object.assign(new Error(b), { statusCode: r.statusCode, body: b })))
         })

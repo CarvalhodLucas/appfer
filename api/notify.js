@@ -1,6 +1,7 @@
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 import https from 'https'
+import crypto from 'crypto'
 
 const MESSAGES = [
   { title: '¡Buenos días, Fernanda! 🌸', body: 'Hoy es un nuevo día para ser la mejor versión de ti misma. ¡Tú puedes!' },
@@ -82,9 +83,19 @@ export default async function handler(req, res) {
 
     const msg = MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
 
+    const buildJwt = (audience) => {
+      const now = Math.floor(Date.now() / 1000)
+      const h = Buffer.from(JSON.stringify({ typ: 'JWT', alg: 'ES256' })).toString('base64url')
+      const p = Buffer.from(JSON.stringify({ aud: audience, exp: now + 43200, sub: 'https://appfer.vercel.app' })).toString('base64url')
+      const pubBuf = Buffer.from(vapidPublic, 'base64url')
+      const jwk = { kty: 'EC', crv: 'P-256', d: vapidPrivate, x: pubBuf.slice(1,33).toString('base64url'), y: pubBuf.slice(33,65).toString('base64url') }
+      const prvKey = crypto.createPrivateKey({ key: jwk, format: 'jwk' })
+      const sig = crypto.sign(null, Buffer.from(`${h}.${p}`), { key: prvKey, dsaEncoding: 'ieee-p1363' })
+      return `${h}.${p}.${sig.toString('base64url')}`
+    }
     const sendFixed = async (sub, payload) => {
       const details = await webpush.generateRequestDetails(sub, payload)
-      if (details.headers.Authorization) details.headers.Authorization = details.headers.Authorization.replace(', k=', ',k=')
+      details.headers.Authorization = `vapid t=${buildJwt(new URL(sub.endpoint).origin)},k=${vapidPublic}`
       return new Promise((resolve, reject) => {
         const url = new URL(details.endpoint)
         const req2 = https.request({ hostname: url.hostname, path: url.pathname, method: details.method, headers: details.headers }, r => {
