@@ -1565,7 +1565,7 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
           'X-Title': 'FitFernanda App',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-exp:free',
+          model: 'qwen/qwen2-vl-7b-instruct:free',
           messages: [{
             role: 'user',
             content: [
