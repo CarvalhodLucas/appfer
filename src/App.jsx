@@ -2779,12 +2779,14 @@ const ProfileScreen = ({ profile, supabase, addToast, onReset, onProfileUpdate }
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
-      const { error: upsertErr } = await supabase.from('push_subscriptions').upsert(
-        { endpoint: sub.endpoint, subscription: sub.toJSON() },
-        { onConflict: 'endpoint' }
-      )
-      if (upsertErr) {
-        addToast('error', `Error al guardar suscripción: ${upsertErr.message}`)
+      const saveRes = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint, subscription: sub.toJSON() }),
+      })
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => ({}))
+        addToast('error', `Error al guardar suscripción: ${err.error || saveRes.status}`)
         setNotifLoading(false)
         return
       }
