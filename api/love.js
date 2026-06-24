@@ -76,7 +76,7 @@ export default async function handler(req, res) {
       .from('push_subscriptions')
       .select('endpoint, subscription', { count: 'exact' })
 
-    const debug = { url: supabaseUrl.slice(-20), keyRole: supabaseKey.includes('service_role') ? 'service_role' : 'anon_or_other', count }
+    const debug = { url: supabaseUrl.slice(-20), keyRole: supabaseKey.includes('service_role') ? 'service_role' : 'anon_or_other', count, vapidPublic: vapidPublic?.slice(0, 20) }
     if (error) return res.status(500).json({ error: `Supabase error: ${error.message}`, debug })
     if (!subs || subs.length === 0) return res.json({ sent: 0, message: 'No subscriptions found', debug })
 
