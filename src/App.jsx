@@ -2349,8 +2349,12 @@ const NutritionScreen = ({ profile, claudeKey, supabase, addToast }) => {
 // ============================================================
 // CHAT SCREEN
 // ============================================================
+const CHAT_CACHE_KEY = 'fitfer_chat_v1'
+
 const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => {
+    try { const s = localStorage.getItem(CHAT_CACHE_KEY); return s ? JSON.parse(s) : [] } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [initialLoad, setInitialLoad] = useState(true)
@@ -2369,6 +2373,12 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      try { localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(messages.slice(-60))) } catch {}
+    }
   }, [messages])
 
   const loadMessages = async () => {
