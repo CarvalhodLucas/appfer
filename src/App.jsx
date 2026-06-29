@@ -1062,6 +1062,13 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setChecked(c => ({ ...c, [i]: !c[i] }))
   }
 
+  const updateExercise = (i, field, value) => {
+    setTreino(t => {
+      const ejercicios = t.ejercicios.map((ex, idx) => idx === i ? { ...ex, [field]: value } : ex)
+      return { ...t, ejercicios }
+    })
+  }
+
   const muscleGroupEmoji = {
     piernas: '🦵', superior: '💪', core: '🔥', cardio: '🏃', fullbody: '⚡', ligero: '🕊️'
   }
@@ -1177,7 +1184,25 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                           style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)', padding: 0 }}
                         >
                           <p className={`exercise-name${checked[i] ? ' done' : ''}`} style={{ textDecoration: checked[i] ? 'line-through' : 'none', opacity: checked[i] ? 0.6 : 1 }}>{ex.nombre}</p>
-                          <p className="exercise-sets">{ex.series} series × {ex.repeticiones} reps</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                            <input
+                              type="number"
+                              min="1" max="20"
+                              value={ex.series}
+                              onChange={e => updateExercise(i, 'series', Number(e.target.value) || 1)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '32px', padding: '2px 4px', border: '1.5px solid var(--border)', borderRadius: '6px', background: 'var(--bg)', fontSize: '0.78rem', textAlign: 'center', fontFamily: 'var(--font-body)', color: 'var(--text)', outline: 'none' }}
+                            />
+                            <span className="exercise-sets" style={{ margin: 0 }}>series ×</span>
+                            <input
+                              type="text"
+                              value={ex.repeticiones}
+                              onChange={e => updateExercise(i, 'repeticiones', e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '44px', padding: '2px 4px', border: '1.5px solid var(--border)', borderRadius: '6px', background: 'var(--bg)', fontSize: '0.78rem', textAlign: 'center', fontFamily: 'var(--font-body)', color: 'var(--text)', outline: 'none' }}
+                            />
+                            <span className="exercise-sets" style={{ margin: 0 }}>reps</span>
+                          </div>
                         </button>
                         {/* Weight input */}
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
