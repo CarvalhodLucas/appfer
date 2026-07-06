@@ -784,6 +784,13 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [exInput, setExInput] = useState({ avoided: '', prioritized: '' })
   const [expandedExercise, setExpandedExercise] = useState(null)
   const [swappingExercise, setSwappingExercise] = useState(null)
+  const [logPastOpen, setLogPastOpen] = useState(false)
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  const [pastDate, setPastDate] = useState(yesterday.toISOString().split('T')[0])
+  const [pastGroup, setPastGroup] = useState('superior')
+  const [pastIntensity, setPastIntensity] = useState('normal')
+  const [pastExercises, setPastExercises] = useState([{ nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])
+  const [savingPast, setSavingPast] = useState(false)
   const mountedRef = useRef(true)
 
   const today = new Date().toISOString().split('T')[0]
@@ -1069,6 +1076,36 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     })
   }
 
+  const savePastWorkout = async () => {
+    const exercises = pastExercises.filter(e => e.nombre.trim())
+    if (!exercises.length) { addToast('error', 'Añade al menos un ejercicio'); return }
+    setSavingPast(true)
+    try {
+      const payload = {
+        date: pastDate,
+        muscle_group: pastGroup,
+        intensity: pastIntensity,
+        exercises: exercises.map(e => ({ ...e, series: Number(e.series) || 1, peso_kg: e.peso_kg ? Number(e.peso_kg) : null })),
+        completed: true,
+      }
+      const { data: existing } = await supabase.from('treinos').select('id').eq('date', pastDate).maybeSingle()
+      let error
+      if (existing) {
+        ;({ error } = await supabase.from('treinos').update(payload).eq('date', pastDate))
+      } else {
+        ;({ error } = await supabase.from('treinos').insert(payload))
+      }
+      if (error) throw error
+      addToast('success', 'Treino registrado!')
+      setLogPastOpen(false)
+      setPastExercises([{ nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])
+      loadHistory()
+    } catch (e) {
+      addToast('error', 'Erro ao salvar: ' + e.message)
+    }
+    setSavingPast(false)
+  }
+
   const muscleGroupEmoji = {
     piernas: '🦵', superior: '💪', core: '🔥', cardio: '🏃', fullbody: '⚡', ligero: '🕊️'
   }
@@ -1302,7 +1339,27 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                 <Icon name="sparkles" size={15} />
                 {generated ? 'Generar variante diferente' : 'Generar nuevo entreno para hoy'}
               </button>
+
+              <button
+                className="btn btn-ghost"
+                onClick={() => setLogPastOpen(true)}
+                style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}
+              >
+                <Icon name="clock" size={15} />
+                Registrar treino de outro dia
+              </button>
             </>
+          )}
+
+          {!treino && !loading && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setLogPastOpen(true)}
+              style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}
+            >
+              <Icon name="clock" size={15} />
+              Registrar treino de outro dia
+            </button>
           )}
         </>
       ) : view === 'history' ? (
@@ -1409,6 +1466,88 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
           ))}
         </>
+      )}
+      {/* Log past workout modal */}
+      {logPastOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)', zIndex: 80, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setLogPastOpen(false)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: '430px', maxHeight: '90vh', overflowY: 'auto', animation: 'fadeSlideIn 0.3s ease forwards' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '1.1rem' }}>Registrar treino passado</h3>
+              <button onClick={() => setLogPastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}><Icon name="x" size={20} /></button>
+            </div>
+
+            {/* Date */}
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Data</label>
+            <input type="date" className="input" value={pastDate} onChange={e => setPastDate(e.target.value)} max={new Date().toISOString().split('T')[0]} style={{ marginTop: '6px', marginBottom: '16px' }} />
+
+            {/* Muscle group */}
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grupo muscular</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', marginBottom: '16px' }}>
+              {[['piernas','🦵','Piernas'], ['superior','💪','Superior'], ['core','🔥','Core'], ['cardio','🏃','Cardio'], ['fullbody','⚡','Full Body'], ['ligero','🕊️','Ligero']].map(([v, emoji, label]) => (
+                <button key={v} onClick={() => setPastGroup(v)} style={{ padding: '7px 14px', borderRadius: '999px', border: `2px solid ${pastGroup === v ? 'var(--coral)' : 'var(--border)'}`, background: pastGroup === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastGroup === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastGroup === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                  {emoji} {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Intensity */}
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Intensidade</label>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px', marginBottom: '20px' }}>
+              {[['ligero','Leve'], ['normal','Normal'], ['intenso','Intenso']].map(([v, l]) => (
+                <button key={v} onClick={() => setPastIntensity(v)} style={{ flex: 1, padding: '8px', borderRadius: '10px', border: `2px solid ${pastIntensity === v ? 'var(--coral)' : 'var(--border)'}`, background: pastIntensity === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastIntensity === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastIntensity === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Exercises */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Exercícios</label>
+              <button onClick={() => setPastExercises(ex => [...ex, { nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])} style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-body)' }}>
+                <Icon name="plus" size={13} /> Adicionar
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+              {pastExercises.map((ex, i) => (
+                <div key={i} style={{ background: 'var(--border-light)', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      className="input"
+                      placeholder="Nome do exercício"
+                      value={ex.nombre}
+                      onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
+                      style={{ flex: 1, padding: '8px 10px', fontSize: '0.88rem' }}
+                    />
+                    {pastExercises.length > 1 && (
+                      <button onClick={() => setPastExercises(list => list.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', flexShrink: 0 }}>
+                        <Icon name="x" size={16} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>SÉRIES</span>
+                      <input type="number" min="1" max="20" className="input" value={ex.series} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, series: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>REPS</span>
+                      <input type="text" className="input" placeholder="12" value={ex.repeticiones} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, repeticiones: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>PESO (kg)</span>
+                      <input type="number" min="0" className="input" placeholder="—" value={ex.peso_kg} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, peso_kg: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button className="btn btn-success w-full" onClick={savePastWorkout} disabled={savingPast}>
+              {savingPast ? <><div className="spinner spinner-sm" />Salvando...</> : <><Icon name="check" size={18} />Salvar treino</>}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
