@@ -883,79 +883,46 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     setView('today')
   }
 
-  // WGER exercise base IDs with confirmed images — keyed by Spanish keyword (lowercase, no accents)
-  const WGER_ID_MAP = [
-    ['hip thrust', 1642], ['glute bridge', 1642], ['puente de gluteo', 1642],
-    ['peso muerto rumano', 1652], ['romanian', 1652],
-    ['peso muerto', 184], ['deadlift', 184],
-    ['sentadilla bulgara', 1706], ['bulgarian', 1706],
-    ['sentadilla frontal', 257], ['front squat', 257],
-    ['sentadilla', 1801], ['squat', 1801],
-    ['leg press', 375], ['prensa', 375],
-    ['estocada', 984], ['zancada', 984], ['lunge', 984],
-    ['press de banca con mancuerna', 75], ['dumbbell bench', 75],
-    ['press de banca inclinado', 537], ['incline bench', 537], ['banca inclinada', 537],
-    ['press de banca', 73], ['bench press', 73],
-    ['press de hombros con mancuerna', 567], ['dumbbell shoulder', 567],
-    ['press militar', 1893], ['overhead press', 1893], ['press de hombros', 566],
-    ['dominadas', 475], ['pull-up', 475], ['pull up', 475],
-    ['jalon', 1635], ['jalón', 1635], ['lat pulldown', 1635],
-    ['remo con mancuerna', 1637], ['dumbbell row', 1637],
-    ['remo en polea', 921], ['remo sentado', 921], ['seated row', 921],
-    ['remo con barra', 83], ['barbell row', 83], ['remo', 83],
-    ['triceps en polea', 1185], ['triceps pushdown', 1185],
-    ['triceps aereo', 1519], ['triceps overhead', 1519], ['triceps', 659],
-    ['biceps con mancuerna', 92], ['curl con mancuerna', 92],
-    ['curl de biceps', 91], ['biceps', 91], ['curl', 91],
-    ['martillo', 272], ['hammer curl', 272],
-    ['plancha', 458], ['plank', 458],
-    ['crunch', 167], ['abdominales', 167],
-    ['russian twist', 1193],
-    ['patada de gluteo', 990], ['patada', 990], ['kickback', 990],
-    ['abductor', 1748], ['hip abduction', 1748],
-    ['elevaciones laterales', 348], ['lateral raise', 348],
-    ['elevaciones frontales', 256], ['front raise', 256],
-    ['gemelos', 1243], ['calf raise', 1243],
-    ['curl de femoral', 364], ['leg curl', 364], ['femoral', 364],
-    ['extension de cuadriceps', 369], ['leg extension', 369],
-    ['fondos', 194], ['dips', 194],
-    ['push up', 1551], ['flexiones', 1551],
-    ['hyperextension', 301], ['extension de espalda', 301],
-    ['face pull', 829],
-    ['press inclinado con mancuerna', 1277], ['incline dumbbell', 1277],
-    ['vuelos', 238], ['aperturas', 238], ['chest fly', 238],
-  ]
+  // ExerciseGymGifsDB — 1323 exercises in Spanish, GIFs + WebP thumbnails via jsDelivr CDN
+  let _exDbCache = null
+  const _norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ')
 
-  const getWgerIdForExercise = (nombre) => {
-    const n = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
-    for (const [keyword, id] of WGER_ID_MAP) {
-      if (n.includes(keyword)) return id
+  const getExerciseDb = async () => {
+    if (_exDbCache) return _exDbCache
+    try { const c = localStorage.getItem('ff_exdb_v2'); if (c) { _exDbCache = JSON.parse(c); return _exDbCache } } catch {}
+    const r = await fetch('https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@main/api/es/exercises.json')
+    const data = await r.json()
+    _exDbCache = data.exercises
+    try { localStorage.setItem('ff_exdb_v2', JSON.stringify(_exDbCache)) } catch {}
+    return _exDbCache
+  }
+
+  const findExerciseInDb = (exercises, nombre) => {
+    const q = _norm(nombre)
+    const words = q.split(/\s+/).filter(w => w.length > 2)
+    if (!words.length) return null
+    let best = null, bestScore = -1
+    for (const ex of exercises) {
+      const name = _norm(ex.name)
+      let score = words.reduce((s, w) => s + (name.includes(w) ? 1 : 0), 0)
+      if (name.includes(q)) score += words.length
+      if (score > bestScore) { bestScore = score; best = ex }
     }
-    return null
+    return bestScore > 0 ? best : null
   }
 
   const loadExerciseImage = async (nombre, idx, force = false) => {
-    // Use functional update to guard against stale closure + concurrent calls
     let skip = false
     setExerciseImages(prev => {
       if (!force && prev[idx] !== undefined) { skip = true; return prev }
       return { ...prev, [idx]: 'loading' }
     })
-    // Wait one tick so the functional update is applied before we check skip
     await new Promise(r => setTimeout(r, 0))
     if (skip) return
     try {
-      const wgerId = getWgerIdForExercise(nombre)
-      if (wgerId) {
-        const r = await fetch(`https://wger.de/api/v2/exerciseimage/?format=json&exercise=${wgerId}&limit=3`)
-        const d = await r.json()
-        if (d.results?.length) {
-          const main = d.results.find(i => i.is_main) || d.results[0]
-          setExerciseImages(prev => ({ ...prev, [idx]: main.image }))
-          return
-        }
-      }
-      setExerciseImages(prev => ({ ...prev, [idx]: null }))
+      const db = await getExerciseDb()
+      const match = findExerciseInDb(db, nombre)
+      setExerciseImages(prev => ({ ...prev, [idx]: match ? { thumb: match.thumbUrl, gif: match.gifUrl, instructions: match.instructions } : null }))
     } catch {
       setExerciseImages(prev => ({ ...prev, [idx]: null }))
     }
@@ -1208,10 +1175,10 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                         {/* Thumbnail */}
                         <div style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, overflow: 'hidden', background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {exerciseImages[i] === 'loading' && <div className="spinner spinner-sm" />}
-                          {exerciseImages[i] && exerciseImages[i] !== 'loading' && (
-                            <img src={exerciseImages[i]} alt="" onError={() => setExerciseImages(prev => ({ ...prev, [i]: null }))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          {exerciseImages[i]?.thumb && (
+                            <img src={exerciseImages[i].thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           )}
-                          {(exerciseImages[i] === null || exerciseImages[i] === undefined) && exerciseImages[i] !== 'loading' && (
+                          {!exerciseImages[i]?.thumb && exerciseImages[i] !== 'loading' && (
                             <Icon name="dumbbell" size={18} style={{ color: 'var(--text-muted)' }} />
                           )}
                         </div>
@@ -1265,17 +1232,24 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                       {/* Expanded detail panel */}
                       {isExpanded && (
                         <div style={{ background: 'var(--border-light)', borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {/* Exercise photo full size */}
-                          {exerciseImages[i] && exerciseImages[i] !== 'loading' && (
+                          {/* Exercise GIF */}
+                          {exerciseImages[i]?.gif && (
                             <img
-                              src={exerciseImages[i]}
+                              src={exerciseImages[i].gif}
                               alt={ex.nombre}
-                              onError={() => setExerciseImages(prev => ({ ...prev, [i]: null }))}
-                              style={{ width: '100%', maxHeight: '220px', objectFit: 'cover', borderRadius: '10px', display: 'block' }}
+                              style={{ width: '100%', maxHeight: '260px', objectFit: 'contain', borderRadius: '10px', display: 'block', background: 'var(--bg)' }}
                             />
                           )}
                           {ex.descripcion && (
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{ex.descripcion}</p>
+                          )}
+                          {/* Step-by-step instructions from DB */}
+                          {exerciseImages[i]?.instructions?.length > 0 && (
+                            <ol style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {exerciseImages[i].instructions.map((step, s) => (
+                                <li key={s} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>{step}</li>
+                              ))}
+                            </ol>
                           )}
                           {hasSuggestion && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(232,115,90,0.08)', borderRadius: '8px', padding: '10px 12px' }}>
