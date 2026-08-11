@@ -813,7 +813,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
   const [swappingExercise, setSwappingExercise] = useState(null)
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
   const [pastDate, setPastDate] = useState(yesterday.toISOString().split('T')[0])
-  const [pastGroup, setPastGroup] = useState('superior')
+  const [pastGroup, setPastGroup] = useState(['superior'])
   const [pastIntensity, setPastIntensity] = useState('normal')
   const [pastExercises, setPastExercises] = useState([{ nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])
   const [savingPast, setSavingPast] = useState(false)
@@ -1076,7 +1076,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
     try {
       const payload = {
         date: pastDate,
-        muscle_group: pastGroup,
+        muscle_group: pastGroup.join(', '),
         intensity: pastIntensity,
         exercises: exercises.map(e => ({ ...e, series: Number(e.series) || 1, peso_kg: e.peso_kg ? Number(e.peso_kg) : null })),
         completed: true,
@@ -1091,6 +1091,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
       if (error) throw error
       addToast('success', '¡Entrenamiento registrado!')
       setView('today')
+      setPastGroup(['superior'])
       setPastExercises([{ nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])
       loadHistory()
     } catch (e) {
@@ -1437,11 +1438,14 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
           <div>
             <p style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Grupo muscular</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {[['piernas','🦵','Piernas'], ['superior','💪','Superior'], ['core','🔥','Core'], ['cardio','🏃','Cardio'], ['fullbody','⚡','Full Body'], ['ligero','🕊️','Ligero']].map(([v, emoji, label]) => (
-                <button key={v} onClick={() => setPastGroup(v)} style={{ padding: '6px 12px', borderRadius: '999px', border: `2px solid ${pastGroup === v ? 'var(--coral)' : 'var(--border)'}`, background: pastGroup === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastGroup === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastGroup === v ? 700 : 400, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
-                  {emoji} {label}
-                </button>
-              ))}
+              {[['piernas','🦵','Piernas'], ['superior','💪','Superior'], ['core','🔥','Core'], ['cardio','🏃','Cardio'], ['fullbody','⚡','Full Body'], ['ligero','🕊️','Ligero']].map(([v, emoji, label]) => {
+                const sel = pastGroup.includes(v)
+                return (
+                  <button key={v} onClick={() => setPastGroup(g => sel ? g.filter(x => x !== v) : [...g, v])} style={{ padding: '6px 12px', borderRadius: '999px', border: `2px solid ${sel ? 'var(--coral)' : 'var(--border)'}`, background: sel ? 'rgba(232,115,90,0.1)' : 'transparent', color: sel ? 'var(--coral)' : 'var(--text)', fontWeight: sel ? 700 : 400, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                    {emoji} {label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
