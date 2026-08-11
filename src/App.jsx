@@ -2555,13 +2555,24 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   const [humorLoading, setHumorLoading] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const scrollContainerRef = useRef(null)
+  const mountedOnce = useRef(false)
 
   useEffect(() => {
     loadMessages()
   }, [])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (!mountedOnce.current) {
+      // First render after mount — jump instantly so it never shows the top
+      el.scrollTop = el.scrollHeight
+      mountedOnce.current = true
+    } else {
+      // New message arrived — smooth scroll
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
 
   useEffect(() => {
@@ -2952,7 +2963,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingTop: 'var(--header-height)' }}>
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: '100px', scrollbarWidth: 'none' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: '100px', scrollbarWidth: 'none' }}>
         <div className="chat-wrap">
           {messages.map((msg, i) => {
             const prevRole = messages[i - 1]?.role
