@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@supabase/supabase-js'
 import './index.css'
+
+// Portal: renders children directly into document.body, escaping any overflow:hidden ancestor
+const Portal = ({ children }) => createPortal(children, document.body)
 
 // ============================================================
 // ICONS — SVG inline (Heroicons / Tabler-style)
@@ -1464,9 +1468,10 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
           ))}
         </>
       )}
-      {/* Log past workout modal */}
+      {/* Log past workout modal — rendered via Portal to escape app-container overflow:hidden */}
       {logPastOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', flexDirection: 'column' }}>
+        <Portal>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column' }}>
           {/* Click-to-close spacer (6% of screen) */}
           <div style={{ flex: '0 0 6%', background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)' }} onClick={() => setLogPastOpen(false)} />
           {/* Modal panel — takes remaining 94%, height guaranteed by flex */}
@@ -1576,6 +1581,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   )
