@@ -1466,8 +1466,11 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
       )}
       {/* Log past workout modal */}
       {logPastOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)', zIndex: 80 }} onClick={() => setLogPastOpen(false)}>
-          <div style={{ position: 'fixed', top: '6%', bottom: 0, left: 0, right: 0, background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', flexDirection: 'column' }}>
+          {/* Click-to-close spacer (6% of screen) */}
+          <div style={{ flex: '0 0 6%', background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)' }} onClick={() => setLogPastOpen(false)} />
+          {/* Modal panel — takes remaining 94%, height guaranteed by flex */}
+          <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
             {/* ── HEADER: date + group + intensity — NEVER scroll away ── */}
             <div style={{ padding: '16px 18px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-light)' }}>
