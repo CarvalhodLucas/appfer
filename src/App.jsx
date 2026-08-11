@@ -1468,14 +1468,18 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
           ))}
         </>
       )}
-      {/* Log past workout modal — rendered via Portal to escape app-container overflow:hidden */}
+      {/* Log past workout modal — Portal escapes app-container overflow:hidden */}
       {logPastOpen && (
         <Portal>
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column' }}>
-          {/* Click-to-close spacer (6% of screen) */}
-          <div style={{ flex: '0 0 6%', background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)' }} onClick={() => setLogPastOpen(false)} />
-          {/* Modal panel — takes remaining 94%, height guaranteed by flex */}
-          <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <>
+        {/* Full-screen dark backdrop — click to close */}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)' }} onClick={() => setLogPastOpen(false)} />
+        {/* Centered column, same max-width as the app, pointer-none so clicks reach backdrop */}
+        <div style={{ position: 'fixed', inset: 0, zIndex: 201, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none' }}>
+          {/* Spacer 6% — transparent, clicks fall through to backdrop */}
+          <div style={{ flex: '0 0 6%', width: '100%', maxWidth: '430px' }} />
+          {/* Modal panel — takes remaining 94% of the column */}
+          <div style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: '430px', background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden', pointerEvents: 'auto' }} onClick={e => e.stopPropagation()}>
 
             {/* ── HEADER: date + group + intensity — NEVER scroll away ── */}
             <div style={{ padding: '16px 18px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-light)' }}>
@@ -1581,6 +1585,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
           </div>
         </div>
+        </>
         </Portal>
       )}
     </div>
