@@ -233,6 +233,8 @@ REGLAS DE COMPORTAMIENTO:
 7. Sé breve y directa, no más de 3-4 frases en respuestas del chat
 8. Celebra cada pequeño logro con entusiasmo genuino
 14. RESPONDE SOLO LO QUE TE PREGUNTAN. No sugieras espontáneamente entrenamientos, ejercicios ni cambios que Fernanda no haya pedido. Si dice "perfecto", "gracias", "ok" u otras confirmaciones breves, responde solo con un mensaje corto de cierre. No añadas propuestas adicionales.
+16. CONTEXTO NUTRICIONAL: Si Fernanda menciona "entrenamiento", "treino", "ejercicio" en una pregunta sobre COMIDA o ALIMENTACIÓN (ej: "qué como antes del entrenamiento", "tengo hambre después de entrenar"), es una pregunta de NUTRICIÓN — respóndela solo con consejos de alimentación, no generes ningún entrenamiento.
+17. NO OFREZCAS ENTRENAMIENTOS PROACTIVAMENTE. Solo genera un entrenamiento cuando Fernanda lo pida explícitamente con palabras como "dame un treino", "genera mi entrenamiento", "quiero entrenar hoy". Una conversación sobre dolor muscular, alimentación deportiva o descanso NO es una solicitud de entrenamiento.
 15. NUNCA devuelvas JSON en el chat. Responde siempre en texto natural. Los JSON internos del sistema se gestionan automáticamente y Fernanda nunca debe verlos.
 9. Si tiene lesiones o limitaciones físicas → NUNCA incluyas ejercicios que las agraven; sugiere siempre alternativas seguras
 10. Usa la altura, el peso y la edad para dar recomendaciones calóricas y de progresión más precisas
@@ -242,7 +244,7 @@ REGLAS DE COMPORTAMIENTO:
 
 ACCIONES — añade EXACTAMENTE al FINAL de tu respuesta (solo una acción por respuesta):
 
-GENERAR ENTRENAMIENTO — Cuando Fernanda pida un entrenamiento o quieras proponerle uno, responde con tu mensaje motivador y añade al final:
+GENERAR ENTRENAMIENTO — SOLO cuando Fernanda pida EXPLÍCITAMENTE un entrenamiento nuevo ("dame un treino", "genera mi rutina", "quiero entrenar hoy"). Preguntas sobre alimentación deportiva NO cuentan. Responde con tu mensaje motivador y añade al final:
 [ACCIÓN:{"type":"generate_workout","workout":{"titulo":"Nombre motivador","grupo_muscular":"piernas|superior|core|cardio|fullbody|ligero","intensidad":"ligero|normal|intenso","duracion_min":30,"ejercicios":[{"nombre":"Nombre","series":3,"repeticiones":"12","descripcion":"Descripción simple"}]},"description":"Breve descripción del entrenamiento"}]
 NUNCA muestres el JSON del entrenamiento como texto en el chat — solo el bloque ACCIÓN al final. El entrenamiento quedará guardado automáticamente en la sección Entreno.
 
@@ -2617,7 +2619,15 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
       const baseSp = buildSystemPrompt(profile, todayCtx)
 
       // Detect intent
-      const isWorkoutReq = /treino|entrenamiento|ejercicio|exerc[ií]cio|entrena|workout|muscula|musculac|braço|braco|perna|abdomen|cardio|hombro|espalda|pecho|pierna/i.test(text)
+      // Only trigger workout generation when she's EXPLICITLY requesting a new workout
+      // Nutrition context (what to eat before/after training) must NOT trigger workout generation
+      const isNutritionCtx = /\b(antes|después|despues|depois|pre|post|que\s+comer|comer|alimenta|nutri|comida|dieta|proteína|proteina|carbohidrato|snack|caloria|kcal|refeição|ingerir|calorias)\b/i.test(text)
+      const isWorkoutReq = !isNutritionCtx && (
+        /\b(genera|crea|dame|dá|quiero|prepara|hazme|arma|diseña|manda|quero|fazer|haz|pon)\b.{0,60}(treino|entrenamiento|rutina|ejercicios|workout)/i.test(text)
+        || /^\s*(treino|entrenamiento|workout|rutina)[!?.]*\s*$/i.test(text.trim())
+        || /\b(treino|entrenamiento|workout)\s+(de\s+)?(hoy|hoje)\b/i.test(text)
+        || /\b(vamos|quero|quiero)\s+(fazer|um|el|un)?\s*(treino|entrenamiento|workout)\b/i.test(text)
+      )
       const isMealLog = /\b(com[ií]|almorcé|desayuné|cené|meren[dg]|snack[eé]|bebi|bebí|tomei|me\s+com[ií]|me\s+tomé|acabo\s+de\s+comer|acab[oó]\s+de\s+comer)\b/i.test(text)
 
       // If workout requested and no humor check-in yet today → ask first
@@ -2857,18 +2867,41 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingTop: 'var(--header-height)' }}>
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px', paddingBottom: '100px', scrollbarWidth: 'none' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', paddingBottom: '100px', scrollbarWidth: 'none' }}>
         <div className="chat-wrap">
-          {messages.map((msg, i) => (
-            <div key={msg.id || i} className={`chat-row ${msg.role}`}>
-              {msg.role === 'assistant' && (
-                <div className="chat-avatar">🌸</div>
-              )}
-              <div className={`chat-bubble bubble-${msg.role}`} id={`msg-${i}`}>
-                {msg.role === 'assistant' ? renderMd(msg.content) : msg.content}
+          {messages.map((msg, i) => {
+            const prevRole = messages[i - 1]?.role
+            const nextRole = messages[i + 1]?.role
+            const isFirst = prevRole !== msg.role
+            const isLast = nextRole !== msg.role
+            const ts = msg.created_at ? new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null
+            return (
+              <div key={msg.id || i} style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: isFirst ? '10px' : '2px' }}>
+                {msg.role === 'assistant' && isFirst && (
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, paddingLeft: '44px', letterSpacing: '0.02em' }}>Coach Fit</span>
+                )}
+                <div className={`chat-row ${msg.role}`}>
+                  {msg.role === 'assistant' && (
+                    <div className="chat-avatar" style={{ opacity: isLast ? 1 : 0, flexShrink: 0 }}>🌸</div>
+                  )}
+                  <div
+                    className={`chat-bubble bubble-${msg.role}`}
+                    id={`msg-${i}`}
+                    style={{
+                      borderRadius: msg.role === 'assistant'
+                        ? `18px 18px 18px ${isLast ? '4px' : '18px'}`
+                        : `18px 18px ${isLast ? '4px' : '18px'} 18px`,
+                    }}
+                  >
+                    {msg.role === 'assistant' ? renderMd(msg.content) : msg.content}
+                    {ts && isLast && (
+                      <div style={{ fontSize: '0.65rem', opacity: 0.55, marginTop: '4px', textAlign: msg.role === 'user' ? 'right' : 'left' }}>{ts}</div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           {loading && (
             <div className="chat-row">
               <div className="chat-avatar">🌸</div>
