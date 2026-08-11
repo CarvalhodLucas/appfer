@@ -1466,114 +1466,112 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
       )}
       {/* Log past workout modal */}
       {logPastOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)', zIndex: 80, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setLogPastOpen(false)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: '430px', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ fontWeight: 700, fontSize: '1.1rem' }}>Registrar entrenamiento</h3>
-              <button onClick={() => setLogPastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}><Icon name="x" size={20} /></button>
-            </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)', zIndex: 80 }} onClick={() => setLogPastOpen(false)}>
+          <div style={{ position: 'fixed', top: '8%', bottom: 0, left: 0, right: 0, background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
-            {/* Date — prominent section */}
-            <div style={{ background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.22)', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '20px' }}>
-              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>📅 ¿Cuándo entrenaste?</p>
-              {/* Quick-select buttons */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                {[['Ayer', -1], ['Hace 2 días', -2], ['Hace 3 días', -3]].map(([label, offset]) => {
-                  const d = new Date(); d.setDate(d.getDate() + offset)
-                  const iso = d.toISOString().split('T')[0]
-                  const sel = pastDate === iso
-                  return (
-                    <button key={offset} onClick={() => setPastDate(iso)} style={{ padding: '6px 14px', borderRadius: '999px', border: `2px solid ${sel ? 'var(--coral)' : 'var(--border)'}`, background: sel ? 'rgba(232,115,90,0.15)' : 'var(--bg-card)', color: sel ? 'var(--coral)' : 'var(--text)', fontWeight: sel ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
-                      {label}
-                    </button>
-                  )
-                })}
+            {/* Fixed header — always visible */}
+            <div style={{ padding: '20px 20px 0', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <h3 style={{ fontWeight: 700, fontSize: '1.05rem' }}>Registrar entrenamiento</h3>
+                <button onClick={() => setLogPastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}><Icon name="x" size={20} /></button>
               </div>
-              {/* Date display + native picker overlay */}
-              <div style={{ position: 'relative' }}>
-                <div style={{ background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer' }}>
-                  <Icon name="calendar" size={18} style={{ color: 'var(--coral)', flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>
-                    {new Date(pastDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </span>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Toca para cambiar →</span>
+
+              {/* Date — always in view, above scroll */}
+              <div style={{ background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.22)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '16px' }}>
+                <p style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>📅 ¿Cuándo entrenaste?</p>
+                <div style={{ display: 'flex', gap: '7px', marginBottom: '10px' }}>
+                  {[['Ayer', -1], ['Hace 2 días', -2], ['Hace 3 días', -3]].map(([label, offset]) => {
+                    const d = new Date(); d.setDate(d.getDate() + offset)
+                    const iso = d.toISOString().split('T')[0]
+                    const sel = pastDate === iso
+                    return (
+                      <button key={offset} onClick={() => setPastDate(iso)} style={{ flex: 1, padding: '6px 4px', borderRadius: '999px', border: `2px solid ${sel ? 'var(--coral)' : 'var(--border)'}`, background: sel ? 'rgba(232,115,90,0.15)' : 'var(--bg-card)', color: sel ? 'var(--coral)' : 'var(--text)', fontWeight: sel ? 700 : 500, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                        {label}
+                      </button>
+                    )
+                  })}
                 </div>
-                <input
-                  type="date"
-                  value={pastDate}
-                  onChange={e => setPastDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
-                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <div style={{ background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '9px 12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer' }}>
+                    <Icon name="calendar" size={16} style={{ color: 'var(--coral)', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>
+                      {new Date(pastDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>cambiar →</span>
+                  </div>
+                  <input type="date" value={pastDate} onChange={e => setPastDate(e.target.value)} max={new Date().toISOString().split('T')[0]} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                </div>
               </div>
             </div>
 
-            {/* Muscle group */}
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grupo muscular</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', marginBottom: '16px' }}>
-              {[['piernas','🦵','Piernas'], ['superior','💪','Superior'], ['core','🔥','Core'], ['cardio','🏃','Cardio'], ['fullbody','⚡','Full Body'], ['ligero','🕊️','Ligero']].map(([v, emoji, label]) => (
-                <button key={v} onClick={() => setPastGroup(v)} style={{ padding: '7px 14px', borderRadius: '999px', border: `2px solid ${pastGroup === v ? 'var(--coral)' : 'var(--border)'}`, background: pastGroup === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastGroup === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastGroup === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
-                  {emoji} {label}
+            {/* Scrollable body */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 20px' }}>
+              {/* Muscle group */}
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grupo muscular</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', marginBottom: '16px' }}>
+                {[['piernas','🦵','Piernas'], ['superior','💪','Superior'], ['core','🔥','Core'], ['cardio','🏃','Cardio'], ['fullbody','⚡','Full Body'], ['ligero','🕊️','Ligero']].map(([v, emoji, label]) => (
+                  <button key={v} onClick={() => setPastGroup(v)} style={{ padding: '7px 14px', borderRadius: '999px', border: `2px solid ${pastGroup === v ? 'var(--coral)' : 'var(--border)'}`, background: pastGroup === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastGroup === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastGroup === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                    {emoji} {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Intensity */}
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Intensidad</label>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px', marginBottom: '20px' }}>
+                {[['ligero','Leve'], ['normal','Normal'], ['intenso','Intenso']].map(([v, l]) => (
+                  <button key={v} onClick={() => setPastIntensity(v)} style={{ flex: 1, padding: '8px', borderRadius: '10px', border: `2px solid ${pastIntensity === v ? 'var(--coral)' : 'var(--border)'}`, background: pastIntensity === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastIntensity === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastIntensity === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* Exercises */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ejercicios</label>
+                <button onClick={() => setPastExercises(ex => [...ex, { nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])} style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-body)' }}>
+                  <Icon name="plus" size={13} /> Añadir
                 </button>
-              ))}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '8px' }}>
+                {pastExercises.map((ex, i) => (
+                  <div key={i} style={{ background: 'var(--border-light)', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input className="input" placeholder="Nombre del ejercicio" value={ex.nombre}
+                        onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
+                        style={{ flex: 1, padding: '8px 10px', fontSize: '0.88rem' }} />
+                      {pastExercises.length > 1 && (
+                        <button onClick={() => setPastExercises(list => list.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', flexShrink: 0 }}>
+                          <Icon name="x" size={16} />
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>SERIES</span>
+                        <input type="number" min="1" max="20" className="input" value={ex.series} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, series: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>REPS</span>
+                        <input type="text" className="input" placeholder="12" value={ex.repeticiones} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, repeticiones: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>PESO (kg)</span>
+                        <input type="number" min="0" className="input" placeholder="—" value={ex.peso_kg} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, peso_kg: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Intensity */}
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Intensidad</label>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '6px', marginBottom: '20px' }}>
-              {[['ligero','Leve'], ['normal','Normal'], ['intenso','Intenso']].map(([v, l]) => (
-                <button key={v} onClick={() => setPastIntensity(v)} style={{ flex: 1, padding: '8px', borderRadius: '10px', border: `2px solid ${pastIntensity === v ? 'var(--coral)' : 'var(--border)'}`, background: pastIntensity === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastIntensity === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastIntensity === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-
-            {/* Exercises */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ejercicios</label>
-              <button onClick={() => setPastExercises(ex => [...ex, { nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])} style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-body)' }}>
-                <Icon name="plus" size={13} /> Añadir
+            {/* Fixed footer — always visible */}
+            <div style={{ padding: '12px 20px 36px', flexShrink: 0 }}>
+              <button className="btn btn-success w-full" onClick={savePastWorkout} disabled={savingPast}>
+                {savingPast ? <><div className="spinner spinner-sm" />Guardando...</> : <><Icon name="check" size={18} />Guardar entrenamiento</>}
               </button>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-              {pastExercises.map((ex, i) => (
-                <div key={i} style={{ background: 'var(--border-light)', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      className="input"
-                      placeholder="Nombre del ejercicio"
-                      value={ex.nombre}
-                      onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
-                      style={{ flex: 1, padding: '8px 10px', fontSize: '0.88rem' }}
-                    />
-                    {pastExercises.length > 1 && (
-                      <button onClick={() => setPastExercises(list => list.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', flexShrink: 0 }}>
-                        <Icon name="x" size={16} />
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>SERIES</span>
-                      <input type="number" min="1" max="20" className="input" value={ex.series} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, series: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>REPS</span>
-                      <input type="text" className="input" placeholder="12" value={ex.repeticiones} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, repeticiones: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>PESO (kg)</span>
-                      <input type="number" min="0" className="input" placeholder="—" value={ex.peso_kg} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, peso_kg: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button className="btn btn-success w-full" onClick={savePastWorkout} disabled={savingPast}>
-              {savingPast ? <><div className="spinner spinner-sm" />Guardando...</> : <><Icon name="check" size={18} />Guardar entrenamiento</>}
-            </button>
           </div>
         </div>
       )}
