@@ -33,6 +33,7 @@ const Icon = ({ name, size = 22, ...props }) => {
     bell: <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />,
     'bell-off': <path strokeLinecap="round" strokeLinejoin="round" d="M9.143 17.082a24.248 24.248 0 0 0 3.844.148m-3.844-.148a23.856 23.856 0 0 1-5.455-1.31 8.964 8.964 0 0 0 2.3-5.542m3.155 6.852a3 3 0 0 0 5.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 0 0 .126-1.785 8.942 8.942 0 0 0-.59-3.165M6.53 6.53A5.97 5.97 0 0 0 6 9v.75a8.964 8.964 0 0 1-2.169 5.837L21 21M6.53 6.53 3 3" />,
     camera: <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316ZM16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />,
+    calendar: <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />,
   }
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
@@ -178,7 +179,10 @@ const callClaude = async (apiKey, systemPrompt, userMessage, isJson = false) => 
 // ============================================================
 const buildSystemPrompt = (profile, todayData) => {
   const { humor, calorias, comidas, ultimoTreino, diasSemana, exAvoided, exPrioritized, weightHistory, recentHistory, mealHistory } = todayData
-  const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const now = new Date()
+  const today = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const currentYear = now.getFullYear()
+  const todayISO = now.toISOString().split('T')[0]
 
   return `Eres Coach Fit 🌸, la entrenadora personal y nutricionista virtual de Fernanda.
 
@@ -254,7 +258,24 @@ REGISTRAR COMIDA — Cuando Fernanda mencione lo que comió y quieras guardarlo 
 CAMBIOS DE PERFIL — Solo cuando Fernanda confirme explícitamente querer cambiar meta calórica, peso u objetivo:
 [ACCIÓN:{"type":"update_calories","value":1800,"description":"Cambiar meta diaria a 1800 kcal"}]
 Tipos: update_calories (value:número), update_weight (current_weight:número, goal_weight:número), update_goal (goal:"texto").
-No añadas el bloque si Fernanda solo pregunta o comenta.`
+No añadas el bloque si Fernanda solo pregunta o comenta.
+
+ACTUALIZAR PERFIL — Cuando Fernanda pida cambiar cualquier dato personal (objetivo, peso, meta calórica, edad, altura, limitaciones físicas, horario de entrenamiento):
+[ACCIÓN:{"type":"update_profile","changes":{"goal":"nuevo objetivo","current_weight":65,"daily_calories":1800},"description":"Actualizar perfil: descripción del cambio"}]
+Campos disponibles: goal, current_weight, goal_weight, daily_calories, height_cm, age, activity_level, physical_limitations, preferred_workout_time.
+
+ELIMINAR DATOS — Cuando Fernanda pida borrar entrenamientos y/o comidas de un período (ej: "borra mi semana de vacaciones", "elimina los registros del 10 al 17 de junio"):
+[ACCIÓN:{"type":"delete_range","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD","description":"Eliminar todos los registros del X al Y"}]
+Si Fernanda no especifica el año, asume ${currentYear}. La fecha de hoy es ${todayISO}.
+
+Para eliminar solo el entrenamiento de un día específico:
+[ACCIÓN:{"type":"delete_workout_date","date":"YYYY-MM-DD","description":"Eliminar entrenamiento del DD de mes"}]
+
+Para eliminar solo las comidas de un día específico:
+[ACCIÓN:{"type":"delete_meal_date","date":"YYYY-MM-DD","description":"Eliminar comidas del DD de mes"}]
+
+LIMPIAR CONVERSACIÓN — Si Fernanda pide borrar el historial del chat o empezar la conversación de cero:
+[ACCIÓN:{"type":"clear_chat","description":"Limpiar toda la conversación del chat"}]`
 }
 
 // ============================================================
@@ -1065,12 +1086,12 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
         ;({ error } = await supabase.from('treinos').insert(payload))
       }
       if (error) throw error
-      addToast('success', 'Treino registrado!')
+      addToast('success', '¡Entrenamiento registrado!')
       setLogPastOpen(false)
       setPastExercises([{ nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])
       loadHistory()
     } catch (e) {
-      addToast('error', 'Erro ao salvar: ' + e.message)
+      addToast('error', 'Error al guardar: ' + e.message)
     }
     setSavingPast(false)
   }
@@ -1322,7 +1343,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                 style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}
               >
                 <Icon name="clock" size={15} />
-                Registrar treino de outro dia
+                Registrar entrenamiento de otro día
               </button>
             </>
           )}
@@ -1334,7 +1355,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
               style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}
             >
               <Icon name="clock" size={15} />
-              Registrar treino de outro dia
+              Registrar entrenamiento de otro día
             </button>
           )}
         </>
@@ -1446,15 +1467,46 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
       {/* Log past workout modal */}
       {logPastOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(61,44,44,0.45)', backdropFilter: 'blur(4px)', zIndex: 80, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setLogPastOpen(false)}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: '430px', maxHeight: '90vh', overflowY: 'auto', animation: 'fadeSlideIn 0.3s ease forwards' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: '24px 24px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: '430px', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ fontWeight: 700, fontSize: '1.1rem' }}>Registrar treino passado</h3>
+              <h3 style={{ fontWeight: 700, fontSize: '1.1rem' }}>Registrar entrenamiento</h3>
               <button onClick={() => setLogPastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}><Icon name="x" size={20} /></button>
             </div>
 
-            {/* Date */}
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Data</label>
-            <input type="date" className="input" value={pastDate} onChange={e => setPastDate(e.target.value)} max={new Date().toISOString().split('T')[0]} style={{ marginTop: '6px', marginBottom: '16px' }} />
+            {/* Date — prominent section */}
+            <div style={{ background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.22)', borderRadius: 'var(--radius-md)', padding: '14px 16px', marginBottom: '20px' }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>📅 ¿Cuándo entrenaste?</p>
+              {/* Quick-select buttons */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                {[['Ayer', -1], ['Hace 2 días', -2], ['Hace 3 días', -3]].map(([label, offset]) => {
+                  const d = new Date(); d.setDate(d.getDate() + offset)
+                  const iso = d.toISOString().split('T')[0]
+                  const sel = pastDate === iso
+                  return (
+                    <button key={offset} onClick={() => setPastDate(iso)} style={{ padding: '6px 14px', borderRadius: '999px', border: `2px solid ${sel ? 'var(--coral)' : 'var(--border)'}`, background: sel ? 'rgba(232,115,90,0.15)' : 'var(--bg-card)', color: sel ? 'var(--coral)' : 'var(--text)', fontWeight: sel ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Date display + native picker overlay */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '11px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer' }}>
+                  <Icon name="calendar" size={18} style={{ color: 'var(--coral)', flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>
+                    {new Date(pastDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Toca para cambiar →</span>
+                </div>
+                <input
+                  type="date"
+                  value={pastDate}
+                  onChange={e => setPastDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+                />
+              </div>
+            </div>
 
             {/* Muscle group */}
             <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Grupo muscular</label>
@@ -1467,7 +1519,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
 
             {/* Intensity */}
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Intensidade</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Intensidad</label>
             <div style={{ display: 'flex', gap: '8px', marginTop: '6px', marginBottom: '20px' }}>
               {[['ligero','Leve'], ['normal','Normal'], ['intenso','Intenso']].map(([v, l]) => (
                 <button key={v} onClick={() => setPastIntensity(v)} style={{ flex: 1, padding: '8px', borderRadius: '10px', border: `2px solid ${pastIntensity === v ? 'var(--coral)' : 'var(--border)'}`, background: pastIntensity === v ? 'rgba(232,115,90,0.1)' : 'transparent', color: pastIntensity === v ? 'var(--coral)' : 'var(--text)', fontWeight: pastIntensity === v ? 700 : 500, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-body)', transition: 'var(--transition)' }}>
@@ -1478,9 +1530,9 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
 
             {/* Exercises */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Exercícios</label>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ejercicios</label>
               <button onClick={() => setPastExercises(ex => [...ex, { nombre: '', series: 3, repeticiones: '12', peso_kg: '' }])} style={{ background: 'var(--coral)', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-body)' }}>
-                <Icon name="plus" size={13} /> Adicionar
+                <Icon name="plus" size={13} /> Añadir
               </button>
             </div>
 
@@ -1490,7 +1542,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <input
                       className="input"
-                      placeholder="Nome do exercício"
+                      placeholder="Nombre del ejercicio"
                       value={ex.nombre}
                       onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))}
                       style={{ flex: 1, padding: '8px 10px', fontSize: '0.88rem' }}
@@ -1503,7 +1555,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>SÉRIES</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>SERIES</span>
                       <input type="number" min="1" max="20" className="input" value={ex.series} onChange={e => setPastExercises(list => list.map((x, j) => j === i ? { ...x, series: e.target.value } : x))} style={{ padding: '7px 8px', fontSize: '0.88rem', textAlign: 'center' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
@@ -1520,7 +1572,7 @@ const WorkoutScreen = ({ profile, claudeKey, supabase, addToast }) => {
             </div>
 
             <button className="btn btn-success w-full" onClick={savePastWorkout} disabled={savingPast}>
-              {savingPast ? <><div className="spinner spinner-sm" />Salvando...</> : <><Icon name="check" size={18} />Salvar treino</>}
+              {savingPast ? <><div className="spinner spinner-sm" />Guardando...</> : <><Icon name="check" size={18} />Guardar entrenamiento</>}
             </button>
           </div>
         </div>
@@ -2517,7 +2569,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
 
   useEffect(() => {
     if (messages.length > 0) {
-      try { localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(messages.slice(-60))) } catch {}
+      try { localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(messages.slice(-80))) } catch {}
     }
   }, [messages])
 
@@ -2525,13 +2577,13 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
     const { data } = await supabase.from('mensagens_agente')
       .select('*')
       .order('created_at', { ascending: true })
-      .limit(50)
+      .limit(60)
 
     if (data && data.length > 0) {
-      setMessages(data)
+      // Prefer the source with more messages so locally-saved messages aren't lost
+      setMessages(prev => data.length >= prev.length ? data : prev)
     } else {
-      // Welcome message
-      setMessages([{
+      setMessages(prev => prev.length > 0 ? prev : [{
         id: 'welcome',
         role: 'assistant',
         content: `¡Hola, Fernanda! 🌸 Soy Coach Fit, tu entrenadora personal virtual. Estoy aquí para ayudarte con tus entrenamientos, tu alimentación, o simplemente para motivarte cuando lo necesites. ¿En qué te puedo ayudar hoy?`
@@ -2784,6 +2836,42 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
         setPendingAction(null)
         setTimeout(() => onNavigate?.('nutrition'), 1200)
         return
+      } else if (pendingAction.type === 'delete_range') {
+        const { start_date, end_date } = pendingAction
+        await Promise.all([
+          supabase.from('treinos').delete().gte('date', start_date).lte('date', end_date),
+          supabase.from('refeicoes').delete().gte('date', start_date).lte('date', end_date),
+        ])
+        addToast('success', `Registros eliminados 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `✅ ¡Listo! Eliminé todos los entrenamientos y comidas del ${start_date} al ${end_date}. Tu historial queda limpio para ese período. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+      } else if (pendingAction.type === 'delete_workout_date') {
+        await supabase.from('treinos').delete().eq('date', pendingAction.date)
+        addToast('success', `Entrenamiento eliminado 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `✅ Eliminé el entrenamiento del ${pendingAction.date}. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+      } else if (pendingAction.type === 'delete_meal_date') {
+        await supabase.from('refeicoes').delete().eq('date', pendingAction.date)
+        addToast('success', `Comidas eliminadas 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `✅ Eliminé las comidas registradas del ${pendingAction.date}. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+      } else if (pendingAction.type === 'update_profile') {
+        await supabase.from('profiles').update(pendingAction.changes).eq('name', 'Fernanda')
+        addToast('success', `Perfil actualizado 🌸`)
+        const confirmMsg = { id: Date.now(), role: 'assistant', content: `✅ ¡Perfil actualizado! Los cambios ya se reflejan en tu cuenta. 🌸` }
+        setMessages(m => [...m, confirmMsg])
+        await supabase.from('mensagens_agente').insert([{ role: 'assistant', content: confirmMsg.content }])
+      } else if (pendingAction.type === 'clear_chat') {
+        await supabase.from('mensagens_agente').delete().gte('created_at', '2000-01-01')
+        localStorage.removeItem(CHAT_CACHE_KEY)
+        const welcomeMsg = { id: 'welcome', role: 'assistant', content: `¡Hola de nuevo, Fernanda! 🌸 Conversación limpiada. ¿En qué te puedo ayudar hoy?` }
+        setMessages([welcomeMsg])
+        addToast('success', `Conversación limpiada 🌸`)
+        setPendingAction(null)
+        return
       }
     } catch {
       addToast('error', 'Error al aplicar el cambio')
@@ -2918,9 +3006,11 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
           {pendingAction && (
             <div style={{ margin: '8px 0', background: 'rgba(232,115,90,0.07)', border: '1.5px solid rgba(232,115,90,0.25)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '1rem' }}>{pendingAction.type === 'generate_workout' ? '💪' : pendingAction.type === 'log_meal' ? '🥗' : '🌸'}</span>
+                <span style={{ fontSize: '1rem' }}>
+                  {pendingAction.type === 'generate_workout' ? '💪' : pendingAction.type === 'log_meal' ? '🥗' : pendingAction.type === 'delete_range' || pendingAction.type === 'delete_workout_date' || pendingAction.type === 'delete_meal_date' || pendingAction.type === 'clear_chat' ? '🗑️' : '✏️'}
+                </span>
                 <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {pendingAction.type === 'generate_workout' ? 'Entrenamiento listo' : pendingAction.type === 'log_meal' ? 'Registrar comida' : 'Coach Fit propone un cambio'}
+                  {pendingAction.type === 'generate_workout' ? 'Entrenamiento listo' : pendingAction.type === 'log_meal' ? 'Registrar comida' : pendingAction.type === 'delete_range' ? 'Eliminar registros' : pendingAction.type === 'delete_workout_date' ? 'Eliminar entrenamiento' : pendingAction.type === 'delete_meal_date' ? 'Eliminar comidas' : pendingAction.type === 'clear_chat' ? 'Limpiar conversación' : pendingAction.type === 'update_profile' ? 'Actualizar perfil' : 'Coach Fit propone un cambio'}
                 </p>
               </div>
               <p style={{ fontSize: '0.9rem', marginBottom: pendingAction.type === 'generate_workout' && pendingAction.workout?.ejercicios?.length ? '8px' : '14px' }}>{pendingAction.description}</p>
@@ -2935,7 +3025,7 @@ const ChatScreen = ({ profile, claudeKey, supabase, addToast, onNavigate }) => {
                 <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setPendingAction(null)}>Cancelar</button>
                 <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={executeAction}>
                   <Icon name="check" size={14} />
-                  {pendingAction.type === 'generate_workout' ? 'Guardar en Entreno' : pendingAction.type === 'log_meal' ? 'Guardar en Comidas' : 'Confirmar'}
+                  {pendingAction.type === 'generate_workout' ? 'Guardar en Entreno' : pendingAction.type === 'log_meal' ? 'Guardar en Comidas' : pendingAction.type === 'delete_range' || pendingAction.type === 'delete_workout_date' || pendingAction.type === 'delete_meal_date' || pendingAction.type === 'clear_chat' ? 'Sí, eliminar' : 'Confirmar'}
                 </button>
               </div>
             </div>
